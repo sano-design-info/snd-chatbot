@@ -118,18 +118,27 @@ def main():
         with open("./export.html", "wb") as exp_html:
             exp_html.write(b64dec_msg_byte)
 
-        # print(
-        #     [
-        #         base64.b64decode(i.get("body").get("data")).decode("")
-        #         for i in messages_text_parts
-        #     ]
-        # )
+        from bs4 import BeautifulSoup
 
-        # message_attachedfiles = [
-        #     i for i in message_body_parts if "application" in i.get("mimeType")
-        # ]
-        # print(message_attachedfiles)
+        mail_html_bs4 = BeautifulSoup(b64dec_msg_byte)
+        only_body = mail_html_bs4.body()
+        print(only_body[0])
+        # jinja2埋込
 
+        from jinja2 import Template, Environment, FileSystemLoader
+
+        #テンプレート読み込み
+        env = Environment(loader=FileSystemLoader(str(Path(__file__).absolute().parent), encoding='utf8'))
+        tmpl = env.get_template('export.html.jinja')
+
+        #設定ファイル読み込み
+        params = {"export_html":only_body[0]}
+        #レンダリングして出力
+        rendered_html = tmpl.render(params)
+        # print(rendered_html)
+
+        with Path("./export_mail.html").open("w", encoding="utf8") as exp_mail_hmtl:
+            exp_mail_hmtl.write(rendered_html)
         exit()
 
     except HttpError as error:
