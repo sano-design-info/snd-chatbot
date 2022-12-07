@@ -41,6 +41,23 @@ def encode_base64url(bytes_data):
 def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
     return dateutil.parser.parse(gmail_datetimeformat)
 
+def save_attachment_file(
+    service, filename: str, message_id: str, attachment_id: str
+) -> None:
+    attachfile_data = (
+        service.users()
+        .messages()
+        .attachments()
+        .get(
+            userId=target_userid,
+            messageId=message_id,
+            id=attachment_id,
+        )
+        .execute()
+    )
+    # print(attachfile_data)
+    with Path(filename).open("wb") as msg_img_file:
+        msg_img_file.write(decode_base64url(attachfile_data.get("data")))
 
 def main():
     creds = None
@@ -149,7 +166,6 @@ def main():
     b64dec_msg_byte = decode_base64url(messages_text_parts[1].get("body").get("data"))
 
     # imgタグを除去する
-
     mail_html_bs4 = BeautifulSoup(b64dec_msg_byte, "html.parser")
     only_body_tags = mail_html_bs4.body
     for t in only_body_tags.find_all("img"):
@@ -179,24 +195,6 @@ def main():
 
     # メール本文にimgファイルがある場合はそれを取り出す
     # multipart/relatedの時にあるので、それを狙い撃ちで取る
-
-    def save_attachment_file(
-        service, filename: str, message_id: str, attachment_id: str
-    ) -> None:
-        attachfile_data = (
-            service.users()
-            .messages()
-            .attachments()
-            .get(
-                userId=target_userid,
-                messageId=message_id,
-                id=attachment_id,
-            )
-            .execute()
-        )
-        # print(attachfile_data)
-        with Path(filename).open("wb") as msg_img_file:
-            msg_img_file.write(decode_base64url(attachfile_data.get("data")))
 
     if message_body_related:
         message_imgs = [
