@@ -18,7 +18,7 @@
       href="https://www.google.com/a/cpanel/sano-design.info/images/favicon.ico"
       type="image/x-icon"
     />
-    <title>test</title>
+    <title>{{ message_title }}</title>
     <style type="text/css" nonce="EmX4BfKne4_wAFPlSj0R6A">
       body,
       td {
@@ -78,8 +78,10 @@
           <table width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
               <td>
-                <font size="+1"><b>2022年12月度の請求書送付日について</b></font
-                ><br /><font size="-1" color="#777">3 件のメッセージ</font>
+                <font size="+1"
+                  ><b>{{ message_title }}</b></font
+                ><br />
+                <!-- <font size="-1" color="#777">1 件のメッセージ</font> -->
               </td>
             </tr>
           </table>
@@ -97,21 +99,23 @@
             <tr>
               <td>
                 <!-- from -->
-                <font size="-1"
-                  ><b>渡邊　容子 </b>&lt;yo.watanabe@misumi.co.jp&gt;</font
-                >
+                <font size="-1">{{ message_from_address }}</font>
               </td>
               <td align="right">
-                <font size="-1">2022年12月6日 10:55</font>
+                <font size="-1">{{
+                  message_datetime.strftime('%Y年%m月%d日 %H:%M')
+                }}</font>
                 <tr>
-                  <!-- to -->
+                  <!-- to TODO:2022-12-07  ここは今は固定で良し。そのうちにメールjsonから取り出すこと -->
                   <td colspan="2" style="padding-bottom: 4px">
-                    <font size="-1" class="recipient"
-                      ><div>
-                        To: &quot;hiroshi.sano&quot;
-                        &lt;hiroshi.sano@sano-design.info&gt;
-                      </div></font
-                    >
+                    <font size="-1" class="recipient">
+                      <div>
+                        To: "hiroshi.sano" &lt;hiroshi.sano@sano-design.info&gt;
+                      </div>
+                      {%if message_cc_address %}
+                      <div>Cc: {{ message_cc_address }}</div>
+                      {% endif %}
+                    </font>
                     <tr>
                       <td colspan="2">
                         <table
@@ -150,14 +154,14 @@
           <hr />
         </div>
       </div>
-      <script type="text/javascript" nonce="XZxtr_Xa4iZhNuxyc-rHXQ">
+      <!-- <script type="text/javascript" nonce="XZxtr_Xa4iZhNuxyc-rHXQ">
         // <![CDATA[
         document.body.onload = function () {
           document.body.offsetHeight
           window.print()
         }
         // ]]>
-      </script>
+      </script> -->
     </body>
   </head>
 </html>

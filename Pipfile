@@ -10,6 +10,7 @@ google-auth-oauthlib = "*"
 python-dotenv = "*"
 jinja2 = "*"
 bs4 = "*"
+python-dateutil = "*"
 
 [dev-packages]
 black = "*"
