@@ -202,7 +202,7 @@ def main():
         message_imgs = [
             i for i in message_body_related.get("parts") if "image" in i.get("mimeType")
         ]
-        print(message_imgs)
+        # print(message_imgs)
         for msg_img in message_imgs:
             # print(msg_img.get("filename"))
             save_attachment_file(
