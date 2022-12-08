@@ -19,7 +19,7 @@ from jinja2 import Environment, FileSystemLoader
 
 load_dotenv()
 
-thread_order_num = 6
+thread_order_num = 3
 
 cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
@@ -42,14 +42,15 @@ parent_dirpath = Path(__file__).parents[1]
 export_dirpath = parent_dirpath / "export_files"
 export_dirpath.mkdir(exist_ok=True)
 
+token_save_path = parent_dirpath / "token.json"
 cred_json = parent_dirpath / cred_filepath
 
 
-def decode_base64url(s):
+def decode_base64url(s) -> bytes:
     return base64.urlsafe_b64decode(s) + b"=" * (4 - (len(s) % 4))
 
 
-def encode_base64url(bytes_data):
+def encode_base64url(bytes_data) -> str:
     return base64.urlsafe_b64encode(bytes_data).rstrip(b"=")
 
 
@@ -77,10 +78,10 @@ def save_attachment_file(
         msg_img_file.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
 
 
-def main():
+def main() -> None:
     creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if token_save_path:
+        creds = Credentials.from_authorized_user_file(token_save_path, SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -89,7 +90,7 @@ def main():
             flow = InstalledAppFlow.from_client_secrets_file(cred_json, SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
-        with open("token.json", "w") as token:
+        with token_save_path.open("w") as token:
             token.write(creds.to_json())
 
     try:
