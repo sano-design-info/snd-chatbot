@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import base64
+import html
 import os
 import os.path
 from datetime import datetime
@@ -15,8 +16,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from jinja2 import Environment, FileSystemLoader, Template
-
-import html
 
 load_dotenv()
 
@@ -41,6 +40,7 @@ def encode_base64url(bytes_data):
 def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
     return dateutil.parser.parse(gmail_datetimeformat)
 
+
 def save_attachment_file(
     service, filename: str, message_id: str, attachment_id: str
 ) -> None:
@@ -58,6 +58,7 @@ def save_attachment_file(
     # print(attachfile_data)
     with Path(filename).open("wb") as msg_img_file:
         msg_img_file.write(decode_base64url(attachfile_data.get("data")))
+
 
 def main():
     creds = None
