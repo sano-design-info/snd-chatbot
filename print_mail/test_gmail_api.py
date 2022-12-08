@@ -1,5 +1,6 @@
 import base64
 import html
+import io
 import os
 import os.path
 from datetime import datetime
@@ -13,10 +14,12 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
 load_dotenv()
 
+thread_order_num = 1
 
 cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
@@ -33,8 +36,11 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.appdata",
 ]
 
+parent_dirpath = Path(__file__).parents[1]
+export_dirpath = parent_dirpath / "export_files"
+export_dirpath.mkdir(exist_ok=True)
 
-cred_json = Path(__file__).parents[1] / cred_filepath
+cred_json = parent_dirpath / cred_filepath
 
 
 def decode_base64url(s):
@@ -64,7 +70,8 @@ def save_attachment_file(
         .execute()
     )
     # print(attachfile_data)
-    with Path(filename).open("wb") as msg_img_file:
+    print((export_dirpath / Path(filename)))
+    with (export_dirpath / Path(filename)).open("wb") as msg_img_file:
         msg_img_file.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
 
 
@@ -104,7 +111,7 @@ def main():
         # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
         # 選択後のメッセージを元に処理開始
 
-        top_message_id = threads[0].get("id", "")
+        top_message_id = threads[thread_order_num].get("id", "")
         print(top_message_id)
 
         message_result = (
@@ -199,7 +206,9 @@ def main():
     rendered_html = tmpl.render(params)
     # print(rendered_html)
 
-    with Path("./export_mail.html").open("w", encoding="utf8") as exp_mail_hmtl:
+    with (export_dirpath / Path("./export_mail.html")).open(
+        "w", encoding="utf8"
+    ) as exp_mail_hmtl:
         exp_mail_hmtl.write(rendered_html)
 
     # メール本文にimgファイルがある場合はそれを取り出す
@@ -231,6 +240,65 @@ def main():
             top_message_id,
             msg_attach.get("body").get("attachmentId"),
         )
+
+    # ExcelファイルをPDFに変換する
+    target_file = export_dirpath / msg_attach.get("filename")
+    upload_mimetype = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    media = MediaFileUpload(
+        target_file,
+        mimetype=upload_mimetype,
+        resumable=True,
+    )
+
+    file_metadata = {
+        "name": target_file.name,
+        "mimeType": "application/vnd.google-apps.spreadsheet",
+        "parents": ["1f0efE1nKIodvUBQ_rB5GjZlyqwDlglI_"],
+    }
+
+    try:
+        service = build("drive", "v3", credentials=creds)
+
+        # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
+        upload_results = (
+            service.files()
+            .create(body=file_metadata, media_body=media, fields="id")
+            .execute()
+        )
+
+        print(upload_results.get("id"))
+
+        # pdfファイルを取りに行ってみる
+        dl_request = service.files().export_media(
+            fileId=upload_results.get("id"), mimeType="application/pdf"
+        )
+        file = io.BytesIO()
+        downloader = MediaIoBaseDownload(file, dl_request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            print(f"Download {int(status.progress() * 100)}.")
+
+        with (export_dirpath / Path("./export_excel.pdf")).open(
+            "wb"
+        ) as export_exceltopdf:
+            export_exceltopdf.write(file.getvalue())
+
+        # できたら最後にファイルを除去する
+        delete_tmp_excel_result = (
+            service.files()
+            .delete(fileId=upload_results.get("id"), fields="id")
+            .execute()
+        )
+        print("delete file: ", delete_tmp_excel_result)
+
+    except HttpError as error:
+        # TODO(developer) - Handle errors from drive API.
+        print(f"An error occurred: {error}")
+
     exit()
 
 
