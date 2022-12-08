@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import base64
 import html
 import os
@@ -15,7 +13,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader
 
 load_dotenv()
 
@@ -24,7 +22,17 @@ cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
 
 # If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    # "https://www.googleapis.com/auth/gmail.metadata",
+    "https://www.googleapis.com/auth/drive.metadata.readonly",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive.appdata",
+]
+
 
 cred_json = Path(__file__).parents[1] / cred_filepath
 
@@ -57,7 +65,7 @@ def save_attachment_file(
     )
     # print(attachfile_data)
     with Path(filename).open("wb") as msg_img_file:
-        msg_img_file.write(decode_base64url(attachfile_data.get("data")))
+        msg_img_file.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
 
 
 def main():
@@ -96,7 +104,7 @@ def main():
         # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
         # 選択後のメッセージを元に処理開始
 
-        top_message_id = threads[2].get("id", "")
+        top_message_id = threads[0].get("id", "")
         print(top_message_id)
 
         message_result = (
