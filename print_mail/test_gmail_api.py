@@ -19,10 +19,12 @@ from jinja2 import Environment, FileSystemLoader
 
 load_dotenv()
 
-thread_order_num = 1
+thread_order_num = 6
 
 cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
+
+mimetype_gsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
@@ -241,63 +243,73 @@ def main():
             msg_attach.get("body").get("attachmentId"),
         )
 
-    # ExcelファイルをPDFに変換する
-    target_file = export_dirpath / msg_attach.get("filename")
-    upload_mimetype = (
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    renrakukoumoku_excel_attachmenfile = next(
+        (
+            i
+            for i in message_payload.get("parts")
+            if mimetype_gsheet in i.get("mimeType")
+        )
     )
+    print(renrakukoumoku_excel_attachmenfile)
+    # exit()
+    if renrakukoumoku_excel_attachmenfile:
+        # ExcelファイルをPDFに変換する
+        target_file = export_dirpath / renrakukoumoku_excel_attachmenfile.get(
+            "filename"
+        )
+        upload_mimetype = mimetype_gsheet
 
-    media = MediaFileUpload(
-        target_file,
-        mimetype=upload_mimetype,
-        resumable=True,
-    )
-
-    file_metadata = {
-        "name": target_file.name,
-        "mimeType": "application/vnd.google-apps.spreadsheet",
-        "parents": ["1f0efE1nKIodvUBQ_rB5GjZlyqwDlglI_"],
-    }
-
-    try:
-        service = build("drive", "v3", credentials=creds)
-
-        # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
-        upload_results = (
-            service.files()
-            .create(body=file_metadata, media_body=media, fields="id")
-            .execute()
+        media = MediaFileUpload(
+            target_file,
+            mimetype=upload_mimetype,
+            resumable=True,
         )
 
-        print(upload_results.get("id"))
+        file_metadata = {
+            "name": target_file.name,
+            "mimeType": "application/vnd.google-apps.spreadsheet",
+            "parents": ["1f0efE1nKIodvUBQ_rB5GjZlyqwDlglI_"],
+        }
 
-        # pdfファイルを取りに行ってみる
-        dl_request = service.files().export_media(
-            fileId=upload_results.get("id"), mimeType="application/pdf"
-        )
-        file = io.BytesIO()
-        downloader = MediaIoBaseDownload(file, dl_request)
-        done = False
-        while done is False:
-            status, done = downloader.next_chunk()
-            print(f"Download {int(status.progress() * 100)}.")
+        try:
+            service = build("drive", "v3", credentials=creds)
 
-        with (export_dirpath / Path("./export_excel.pdf")).open(
-            "wb"
-        ) as export_exceltopdf:
-            export_exceltopdf.write(file.getvalue())
+            # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
+            upload_results = (
+                service.files()
+                .create(body=file_metadata, media_body=media, fields="id")
+                .execute()
+            )
 
-        # できたら最後にファイルを除去する
-        delete_tmp_excel_result = (
-            service.files()
-            .delete(fileId=upload_results.get("id"), fields="id")
-            .execute()
-        )
-        print("delete file: ", delete_tmp_excel_result)
+            print(upload_results.get("id"))
 
-    except HttpError as error:
-        # TODO(developer) - Handle errors from drive API.
-        print(f"An error occurred: {error}")
+            # pdfファイルを取りに行ってみる
+            dl_request = service.files().export_media(
+                fileId=upload_results.get("id"), mimeType="application/pdf"
+            )
+            file = io.BytesIO()
+            downloader = MediaIoBaseDownload(file, dl_request)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+                print(f"Download {int(status.progress() * 100)}.")
+
+            with (export_dirpath / Path("./export_excel.pdf")).open(
+                "wb"
+            ) as export_exceltopdf:
+                export_exceltopdf.write(file.getvalue())
+
+            # できたら最後にファイルを除去する
+            delete_tmp_excel_result = (
+                service.files()
+                .delete(fileId=upload_results.get("id"), fields="id")
+                .execute()
+            )
+            print("delete file: ", delete_tmp_excel_result)
+
+        except HttpError as error:
+            # TODO(developer) - Handle errors from drive API.
+            print(f"An error occurred: {error}")
 
     exit()
 
