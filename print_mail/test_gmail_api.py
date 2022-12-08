@@ -110,6 +110,7 @@ def main() -> None:
 
         pprint(threads)
 
+        # TODO:2022-12-08
         # 上位10件のスレッド -> メッセージを取得。見てもスレッド数が2件ぐらいのもので十分かな
         # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
         # 選択後のメッセージを元に処理開始
@@ -231,7 +232,6 @@ def main() -> None:
                 msg_img.get("body").get("attachmentId"),
             )
     # 添付ファイルの保持
-
     message_attachmentfiles = [
         i for i in message_payload.get("parts") if "application" in i.get("mimeType")
     ]
@@ -244,6 +244,13 @@ def main() -> None:
             msg_attach.get("body").get("attachmentId"),
         )
 
+    # TODO:2022-12-08
+    # ボイラープレートからディレクトリ生成
+    # run_copyで動かせばよさそう。run_autoはgenerate or update なのであくまでgenerateでやればよし。
+    # run_copyのソースを見てると、dataでdictを受け取る仕組みになってるので、ここにデータを突っ込めば行けそう。cliでも用意されてる。
+    # https://copier.readthedocs.io/en/stable/configuring/#data
+
+    # 連絡項目の印刷用PDFファイル生成
     renrakukoumoku_excel_attachmenfile = next(
         (
             i
