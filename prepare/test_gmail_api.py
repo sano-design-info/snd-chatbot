@@ -29,6 +29,8 @@ load_dotenv()
 cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
 
+estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
+
 msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
 
 mimetype_gsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -214,7 +216,7 @@ def main() -> None:
     comefirm_check = questionary.confirm("run Process?", False).ask()
 
     if not comefirm_check:
-        print("[Cancell Process...")
+        print("[Cancell Process...]")
         exit()
 
     print("[Generate mail Printable PDF]")
@@ -347,11 +349,11 @@ def main() -> None:
         }
 
         try:
-            service = build("drive", "v3", credentials=creds)
+            drive_service = build("drive", "v3", credentials=creds)
 
             # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
             upload_results = (
-                service.files()
+                drive_service.files()
                 .create(body=file_metadata, media_body=media, fields="id")
                 .execute()
             )
@@ -359,7 +361,7 @@ def main() -> None:
             print(upload_results.get("id"))
 
             # pdfファイルを取りに行ってみる
-            dl_request = service.files().export_media(
+            dl_request = drive_service.files().export_media(
                 fileId=upload_results.get("id"), mimeType="application/pdf"
             )
             file = io.BytesIO()
@@ -376,7 +378,7 @@ def main() -> None:
 
             # できたら最後にファイルを除去する
             delete_tmp_excel_result = (
-                service.files()
+                drive_service.files()
                 .delete(fileId=upload_results.get("id"), fields="id")
                 .execute()
             )
@@ -386,17 +388,20 @@ def main() -> None:
             # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
             print(f"An error occurred: {error}")
 
-        # ボイラープレートからディレクトリ生成
-        # TODO:2022-12-09 この一連操作は別ライブラリ化して、単独で呼べるようにしたほうがいいかも
-
-        print("[Generate template dirs]")
-        # detault設定: 正規表現で取れなかった場合はとりあえず作ってしまう
-        boilerplate_config = {"project_name": "0000", "haikan_pattern": "type_s"}
-
-        boilerplate_config["project_name"] = re.match(
+        # ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
+        # 取得ができない場合は0000を用意
+        msm_katasiki_num = "0000"
+        if katasiki_matcher:=re.match(
             r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
             renrakukoumoku_excel_attachmenfile.get("filename"),
-        ).group(1)
+        ):
+            msm_katasiki_num = katasiki_matcher.group(1)
+
+        # ボイラープレートからディレクトリ生成
+        # TODO:2022-12-09 この一連操作は別ライブラリ化して、単独で呼べるようにしたほうがいいかも
+        print("[Generate template dirs]")
+
+        boilerplate_config = {"project_name": msm_katasiki_num, "haikan_pattern": "type_s"}
         copier.run_copy(
             msm_gas_boilerplate_url,
             parent_dirpath / "export_files",
@@ -405,7 +410,34 @@ def main() -> None:
 
         # TODO:2022-12-09
         # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
+        try:
+            # UPPER/LOWER RHLH対応はここでは行わずにしておく（ボイラープレートと同じ対応）
+            copy_template_results = (
+                drive_service.files()
+                .copy(fileId=estimate_template_gsheet_id, fields="id,name")
+                .execute()
+            )
 
+            # コピー先のファイル名を変更する
+            template_suffix = "[ミスミ型番] のコピー"
+            renamed_filename = copy_template_results.get("name").replace(template_suffix, "0000")
+
+            # print(renamed_filename)
+            # replaceでいいかな
+            rename_body = {"name":renamed_filename}
+            rename_estimate_gsheet_result = drive_service.files().update(
+                fileId=copy_template_results.get("id"),
+                body=rename_body,
+                fields='name'
+            ).execute()
+
+            print(f"estimate copy and renamed -> {rename_estimate_gsheet_result.get('name')}")
+
+        except HttpError as error:
+            # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
+            print(f"An error occurred: {error}")
+
+    print("[End Process...]")
     exit()
 
 
