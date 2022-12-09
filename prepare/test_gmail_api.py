@@ -1,12 +1,17 @@
 import base64
 import html
 import io
+import itertools
 import os
 import os.path
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from pprint import pprint
 
+import copier
 import dateutil.parser
+import questionary
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
@@ -24,6 +29,7 @@ thread_order_num = 3
 cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
 
+msm_gas_boilerplate_url = ""
 mimetype_gsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 # If modifying these scopes, delete the file token.json.
@@ -78,6 +84,41 @@ def save_attachment_file(
         msg_img_file.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
 
 
+@dataclass
+class ExpandedMessageItem:
+    "メッセージ一覧の選択や、メール回りで使うときに利用する"
+    gmail_message: dict
+    payload: dict = field(init=False)
+    headers: dict = field(init=False)
+
+    id: str = field(init=False)
+    title: str = field(init=False)
+    from_addresss: str = field(init=False)
+    cc_address: str = field(init=False)
+    datetime_: datetime = field(init=False)
+
+    def __post_init__(self):
+        self.payload = self.gmail_message.get("payload")
+        self.headers = self.payload.get("headers")
+
+        self.id = self.gmail_message.get("id")
+        self.title = next((i for i in self.headers if i.get("name") == "Subject")).get(
+            "value"
+        )
+
+        self.from_addresss = next(
+            (i for i in self.headers if i.get("name") == "From")
+        ).get("value")
+
+        self.cc_address = next((i for i in self.headers if i.get("name") == "CC")).get(
+            "value"
+        )
+
+        self.datetime_ = convert_gmail_datetimestr(
+            next((i for i in self.headers if i.get("name") == "Date")).get("value")
+        )
+
+
 def main() -> None:
     creds = None
     if token_save_path:
@@ -93,6 +134,7 @@ def main() -> None:
         with token_save_path.open("w") as token:
             token.write(creds.to_json())
 
+    messages: list[ExpandedMessageItem] = []
     try:
         # Call the Gmail API
         service = build("gmail", "v1", credentials=creds)
@@ -104,55 +146,68 @@ def main() -> None:
             .list(userId=target_userid, q="label:snd-ミスミ subject:(*MA-*)")
             .execute()
         )
-        # 一番上のものでいいから表示
         threads = thread_results.get("threads", [])
-        from pprint import pprint
 
-        pprint(threads)
+        # pprint(threads)
 
-        # TODO:2022-12-08
-        # 上位10件のスレッド -> メッセージを取得。見てもスレッド数が2件ぐらいのもので十分かな
-        # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
-        # 選択後のメッセージを元に処理開始
+        # 上位10件のスレッド -> メッセージを取得。
+        # スレッドに紐づきが2件ぐらいのメッセージの部分でのもので十分かな
+        if threads:
+            top_threads = list(itertools.islice(threads, 0, 10))
+            for thread in top_threads:
 
-        top_message_id = threads[thread_order_num].get("id", "")
-        print(top_message_id)
+                # threadsのid = threadsの一番最初のmessage>idなので、そのまま使う
+                message_id = thread.get("id", "")
+                # print(message_id)
 
-        message_result = (
-            service.users().messages().get(userId=target_userid, id=top_message_id)
-        ).execute()
+                # スレッドの数が2以上 = すでに納品済みと思われるので削る。
+                # TODO:2022-12-09 ここは2件以上でもまだやり取り中だったりする場合もあるので悩ましい
+                # （数見るだけでもいいかもしれない
+                thread_result = (
+                    service.users()
+                    .threads()
+                    .get(userId=target_userid, id=message_id, fields="messages")
+                ).execute()
 
-        message_payload = message_result.get("payload")
-        message_headers = message_payload.get("headers")
+                message_result = (
+                    service.users().messages().get(userId=target_userid, id=message_id)
+                ).execute()
+
+                if len(thread_result.get("messages")) <= 2:
+                    messages.append(ExpandedMessageItem(gmail_message=message_result))
 
     except HttpError as error:
         # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
         print(f"An error occurred: {error}")
+        exit()
 
-    # print("message_payload...")
-    # print(message_payload)
-    # print(message_headers)
+    if not messages:
+        print(f"cant find messages...")
+        exit()
 
-    message_title = html.escape(
-        next((i for i in message_headers if i.get("name") == "Subject")).get("value")
-    )
+    # 取得が面倒なので最初から必要な値を取り出す
 
-    message_from_addresss = html.escape(
-        next((i for i in message_headers if i.get("name") == "From")).get("value")
-    )
+    message_item_and_labels = []
+    for message in messages:
+        # 送信日, from, タイトル
+        choice_label = [
+            ("class:text", f"{message.datetime_}"),
+            ("class:highlighted", f"{message.title}"),
+        ]
+        message_item_and_labels.append(
+            questionary.Choice(title=choice_label, value=message)
+        )
 
-    message_cc_address = html.escape(
-        next((i for i in message_headers if i.get("name") == "CC")).get("value")
-    )
-    message_datetime_str = next(
-        (i for i in message_headers if i.get("name") == "Date")
-    ).get("value")
+    # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
+    # 選択後のメッセージを元に処理開始
 
-    message_datetime = convert_gmail_datetimestr(message_datetime_str)
+    selected_message: ExpandedMessageItem = questionary.select(
+        "select msm gas mail message", choices=message_item_and_labels
+    ).ask()
 
-    print(
-        f"title:{message_title}\nfrom:{message_from_addresss}\ncc:{message_cc_address}\n{message_datetime}"
-    )
+    print(selected_message.title)
+    # print(selected_message.payload)
+    # exit()
 
     # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
     # relative> altanative の手順で掘る。mixedは一番上で考慮しているのでここでは行わない
@@ -160,7 +215,7 @@ def main() -> None:
     message_body_parts = next(
         (
             i
-            for i in message_payload.get("parts")
+            for i in selected_message.payload.get("parts")
             if i.get("mimeType") == "multipart/alternative"
         ),
         {},
@@ -169,7 +224,7 @@ def main() -> None:
         message_body_related = next(
             (
                 i
-                for i in message_payload.get("parts")
+                for i in selected_message.payload.get("parts")
                 if i.get("mimeType") == "multipart/related"
             )
         )
@@ -201,10 +256,10 @@ def main() -> None:
     # 設定ファイル読み込み
     params = {
         "export_html": only_body_tags,
-        "message_title": message_title,
-        "message_from_addresss": message_from_addresss,
-        "message_cc_address": message_cc_address,
-        "message_datetime": message_datetime,
+        "message_title": html.escape(selected_message.title),
+        "message_from_addresss": html.escape(selected_message.from_addresss),
+        "message_cc_address": html.escape(selected_message.cc_address),
+        "message_datetime": selected_message.datetime_,
     }
     # レンダリングして出力
     rendered_html = tmpl.render(params)
@@ -228,21 +283,23 @@ def main() -> None:
             save_attachment_file(
                 service,
                 msg_img.get("filename"),
-                top_message_id,
+                selected_message.id,
                 msg_img.get("body").get("attachmentId"),
             )
     # 添付ファイルの保持
     message_attachmentfiles = [
-        i for i in message_payload.get("parts") if "application" in i.get("mimeType")
+        i
+        for i in selected_message.payload.get("parts")
+        if "application" in i.get("mimeType")
     ]
 
-    print(message_attachmentfiles)
+    # print(message_attachmentfiles)
 
     for msg_attach in message_attachmentfiles:
         save_attachment_file(
             service,
             msg_attach.get("filename"),
-            top_message_id,
+            selected_message.id,
             msg_attach.get("body").get("attachmentId"),
         )
 
@@ -252,11 +309,18 @@ def main() -> None:
     # run_copyのソースを見てると、dataでdictを受け取る仕組みになってるので、ここにデータを突っ込めば行けそう。cliでも用意されてる。
     # https://copier.readthedocs.io/en/stable/configuring/#data
 
+    boilerplate_config = {}
+    copier.run_copy(
+        msm_gas_boilerplate_url,
+        parent_dirpath / "export_files",
+        data=boilerplate_config,
+    )
+
     # 連絡項目の印刷用PDFファイル生成
     renrakukoumoku_excel_attachmenfile = next(
         (
             i
-            for i in message_payload.get("parts")
+            for i in selected_message.payload.get("parts")
             if mimetype_gsheet in i.get("mimeType")
         )
     )

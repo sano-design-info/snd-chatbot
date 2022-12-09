@@ -11,6 +11,8 @@ python-dotenv = "*"
 jinja2 = "*"
 bs4 = "*"
 python-dateutil = "*"
+questionary = "*"
+copier = "*"
 
 [dev-packages]
 black = "*"
