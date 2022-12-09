@@ -125,7 +125,7 @@ class ExpandedMessageItem:
 def main() -> None:
     print("[Start Process...]")
     creds = None
-    if token_save_path:
+    if token_save_path.exists():
         creds = Credentials.from_authorized_user_file(token_save_path, SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
