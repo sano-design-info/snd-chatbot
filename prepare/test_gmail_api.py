@@ -387,6 +387,7 @@ def main() -> None:
             print(f"An error occurred: {error}")
 
         # ボイラープレートからディレクトリ生成
+        # TODO:2022-12-09 この一連操作は別ライブラリ化して、単独で呼べるようにしたほうがいいかも
 
         print("[Generate template dirs]")
         # detault設定: 正規表現で取れなかった場合はとりあえず作ってしまう
@@ -401,6 +402,9 @@ def main() -> None:
             parent_dirpath / "export_files",
             data=boilerplate_config,
         )
+
+        # TODO:2022-12-09
+        # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
 
     exit()
 
