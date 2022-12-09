@@ -126,7 +126,7 @@ def main() -> None:
         message_headers = message_payload.get("headers")
 
     except HttpError as error:
-        # TODO(developer) - Handle errors from gmail API.
+        # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
         print(f"An error occurred: {error}")
 
     # print("message_payload...")
@@ -235,7 +235,9 @@ def main() -> None:
     message_attachmentfiles = [
         i for i in message_payload.get("parts") if "application" in i.get("mimeType")
     ]
+
     print(message_attachmentfiles)
+
     for msg_attach in message_attachmentfiles:
         save_attachment_file(
             service,
@@ -258,7 +260,9 @@ def main() -> None:
             if mimetype_gsheet in i.get("mimeType")
         )
     )
+
     print(renrakukoumoku_excel_attachmenfile)
+
     # exit()
     if renrakukoumoku_excel_attachmenfile:
         # ExcelファイルをPDFに変換する
@@ -316,7 +320,7 @@ def main() -> None:
             print("delete file: ", delete_tmp_excel_result)
 
         except HttpError as error:
-            # TODO(developer) - Handle errors from drive API.
+            # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
             print(f"An error occurred: {error}")
 
     exit()
