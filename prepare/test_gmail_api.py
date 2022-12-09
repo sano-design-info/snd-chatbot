@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from pprint import pprint
+import re
 
 import copier
 import dateutil.parser
@@ -22,15 +23,16 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
+# load config
 load_dotenv()
-
-thread_order_num = 3
 
 cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
 
-msm_gas_boilerplate_url = ""
+msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
+
 mimetype_gsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
@@ -44,6 +46,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.appdata",
 ]
 
+# generate Path
 parent_dirpath = Path(__file__).parents[1]
 export_dirpath = parent_dirpath / "export_files"
 export_dirpath.mkdir(exist_ok=True)
@@ -120,6 +123,7 @@ class ExpandedMessageItem:
 
 
 def main() -> None:
+    print("[Start Process...]")
     creds = None
     if token_save_path:
         creds = Credentials.from_authorized_user_file(token_save_path, SCOPES)
@@ -189,7 +193,7 @@ def main() -> None:
 
     message_item_and_labels = []
     for message in messages:
-        # 送信日, from, タイトル
+        # 送信日, タイトル
         choice_label = [
             ("class:text", f"{message.datetime_}"),
             ("class:highlighted", f"{message.title}"),
@@ -199,15 +203,21 @@ def main() -> None:
         )
 
     # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
-    # 選択後のメッセージを元に処理開始
+
+    print("[Select Mail...]")
 
     selected_message: ExpandedMessageItem = questionary.select(
         "select msm gas mail message", choices=message_item_and_labels
     ).ask()
 
-    print(selected_message.title)
-    # print(selected_message.payload)
-    # exit()
+    # 選択後、処理開始していいか問い合わせして実行
+    comefirm_check = questionary.confirm("run Process?", False).ask()
+
+    if not comefirm_check:
+        print("[Cancell Process...")
+        exit()
+
+    print("[Generate mail Printable PDF]")
 
     # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
     # relative> altanative の手順で掘る。mixedは一番上で考慮しているのでここでは行わない
@@ -270,6 +280,7 @@ def main() -> None:
     ) as exp_mail_hmtl:
         exp_mail_hmtl.write(rendered_html)
 
+    print("[Save Attachment file and mail image]")
     # メール本文にimgファイルがある場合はそれを取り出す
     # multipart/relatedの時にあるので、それを狙い撃ちで取る
 
@@ -303,19 +314,7 @@ def main() -> None:
             msg_attach.get("body").get("attachmentId"),
         )
 
-    # TODO:2022-12-08
-    # ボイラープレートからディレクトリ生成
-    # run_copyで動かせばよさそう。run_autoはgenerate or update なのであくまでgenerateでやればよし。
-    # run_copyのソースを見てると、dataでdictを受け取る仕組みになってるので、ここにデータを突っ込めば行けそう。cliでも用意されてる。
-    # https://copier.readthedocs.io/en/stable/configuring/#data
-
-    boilerplate_config = {}
-    copier.run_copy(
-        msm_gas_boilerplate_url,
-        parent_dirpath / "export_files",
-        data=boilerplate_config,
-    )
-
+    print("[Generate Excel Printable PDF]")
     # 連絡項目の印刷用PDFファイル生成
     renrakukoumoku_excel_attachmenfile = next(
         (
@@ -325,24 +324,24 @@ def main() -> None:
         )
     )
 
-    print(renrakukoumoku_excel_attachmenfile)
+    # print(renrakukoumoku_excel_attachmenfile)
 
     # exit()
     if renrakukoumoku_excel_attachmenfile:
         # ExcelファイルをPDFに変換する
-        target_file = export_dirpath / renrakukoumoku_excel_attachmenfile.get(
+        target_filepath = export_dirpath / renrakukoumoku_excel_attachmenfile.get(
             "filename"
         )
         upload_mimetype = mimetype_gsheet
 
         media = MediaFileUpload(
-            target_file,
+            target_filepath,
             mimetype=upload_mimetype,
             resumable=True,
         )
 
         file_metadata = {
-            "name": target_file.name,
+            "name": target_filepath.name,
             "mimeType": "application/vnd.google-apps.spreadsheet",
             "parents": ["1f0efE1nKIodvUBQ_rB5GjZlyqwDlglI_"],
         }
@@ -386,6 +385,22 @@ def main() -> None:
         except HttpError as error:
             # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
             print(f"An error occurred: {error}")
+
+        # ボイラープレートからディレクトリ生成
+
+        print("[Generate template dirs]")
+        # detault設定: 正規表現で取れなかった場合はとりあえず作ってしまう
+        boilerplate_config = {"project_name": "0000", "haikan_pattern": "type_s"}
+
+        boilerplate_config["project_name"] = re.match(
+            r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
+            renrakukoumoku_excel_attachmenfile.get("filename"),
+        ).group(1)
+        copier.run_copy(
+            msm_gas_boilerplate_url,
+            parent_dirpath / "export_files",
+            data=boilerplate_config,
+        )
 
     exit()
 
