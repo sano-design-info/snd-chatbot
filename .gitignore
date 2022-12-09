@@ -156,3 +156,4 @@ client_secret_*.json
 token.json
 exam
 export_files
+.DS_Store
