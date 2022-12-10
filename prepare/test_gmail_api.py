@@ -30,7 +30,7 @@ cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
 
 estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
-schedule_sheet_id = "1b-aE375CFD_eXLNKbXlH_LXQG3zJAnVhFeHPRZp5AYE"
+schedule_sheet_id = os.environ.get("SCHEDULE_SHEET_ID")
 
 msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
 
@@ -349,7 +349,9 @@ def main() -> None:
         file_metadata = {
             "name": target_filepath.name,
             "mimeType": "application/vnd.google-apps.spreadsheet",
-            "parents": ["1f0efE1nKIodvUBQ_rB5GjZlyqwDlglI_"],
+            "parents": [
+                "1f0efE1nKIodvUBQ_rB5GjZlyqwDlglI_"
+            ],  # TODO:2022-12-10 定数 -> envへ
         }
 
         try:
@@ -382,9 +384,7 @@ def main() -> None:
                 export_exceltopdf.write(file.getvalue())
 
             print("[append schedule]")
-            # renrakukoumoku_gsheet_file_result = (
-            #     drive_service.files().get(body=upload_results.get("id")).execute()
-            # )
+
             renrakukoumoku_gsheet_id = upload_results.get("id")
             print(f"gsheet id : {renrakukoumoku_gsheet_id}")
             # 配管連絡項目から必要な情報を取り出して、スケジュール表を更新
@@ -419,6 +419,7 @@ def main() -> None:
 
             # スケジュール表の一番後ろの行へ追加する
             # テーブル検索範囲
+            # TODO:2022-12-10 定数 -> envへ
             table_search_range = "22年1月～12月!A5:M5"
 
             append_values = [
@@ -466,7 +467,7 @@ def main() -> None:
             # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
             print(f"An error occurred: {error}")
 
-        exit()
+        # exit()
         # ボイラープレートからディレクトリ生成
         # TODO:2022-12-09 この一連操作は別ライブラリ化して、単独で呼べるようにしたほうがいいかも
         print("[Generate template dirs]")
@@ -493,8 +494,10 @@ def main() -> None:
 
             # コピー先のファイル名を変更する
             template_suffix = "[ミスミ型番] のコピー"
-            renamed_filename = copy_template_results.get("name").replace(
-                template_suffix, "0000"
+            renamed_filename = copy_template_results.get(
+                "name"
+            ).replace(  # TODO:2022-12-10 置き換え後の文字は正式に動かす場合は型式に足してる_testを外す
+                template_suffix, msm_katasiki_num + "_test"
             )
             rename_body = {"name": renamed_filename}
             rename_estimate_gsheet_result = (
@@ -513,10 +516,6 @@ def main() -> None:
         except HttpError as error:
             # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
             print(f"An error occurred: {error}")
-
-        # スケジュール表への追加
-
-        # 配管連絡項目を開いて
 
     print("[End Process...]")
     exit()
