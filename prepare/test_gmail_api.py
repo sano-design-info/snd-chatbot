@@ -30,6 +30,7 @@ cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
 
 estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
+schedule_sheet_id = "1b-aE375CFD_eXLNKbXlH_LXQG3zJAnVhFeHPRZp5AYE"
 
 msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
 
@@ -126,6 +127,9 @@ class ExpandedMessageItem:
 
 def main() -> None:
     print("[Start Process...]")
+
+    # TODO:2022-12-10 ここのサービス取得までを一つのモジュールにして、外に出す。
+    # この環境で見積書作成も行うので、google apiのサービス生成をするヘルパーモジュールを作る
     creds = None
     if token_save_path.exists():
         creds = Credentials.from_authorized_user_file(token_save_path, SCOPES)
@@ -354,10 +358,11 @@ def main() -> None:
             # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
             upload_results = (
                 drive_service.files()
-                .create(body=file_metadata, media_body=media, fields="id")
+                .create(body=file_metadata, media_body=media)
                 .execute()
             )
 
+            print(upload_results)
             print(upload_results.get("id"))
 
             # pdfファイルを取りに行ってみる
@@ -376,32 +381,100 @@ def main() -> None:
             ) as export_exceltopdf:
                 export_exceltopdf.write(file.getvalue())
 
-            # できたら最後にファイルを除去する
+            print("[append schedule]")
+            # renrakukoumoku_gsheet_file_result = (
+            #     drive_service.files().get(body=upload_results.get("id")).execute()
+            # )
+            renrakukoumoku_gsheet_id = upload_results.get("id")
+            print(f"gsheet id : {renrakukoumoku_gsheet_id}")
+            # 配管連絡項目から必要な情報を取り出して、スケジュール表を更新
+            # TODO:2022-12-10 ここも必要な情報を取り出したら後で行うようにする
+
+            # ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
+            # 取得ができない場合は0000を用意
+            msm_katasiki_num = "0000"
+            if katasiki_matcher := re.match(
+                r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
+                renrakukoumoku_excel_attachmenfile.get("filename"),
+            ):
+                msm_katasiki_num = katasiki_matcher.group(1)
+            # エンドユーザー: 今は列がないので登録しない
+            gsheet_range_enduser = "D10"
+            # 顧客
+            gsheet_range_kokyaku = "D6"
+            sheet_service = build("sheets", "v4", credentials=creds)
+            pick_renrakukoumoku_result = (
+                sheet_service.spreadsheets()
+                .values()
+                .get(spreadsheetId=renrakukoumoku_gsheet_id, range=gsheet_range_kokyaku)
+                .execute()
+            )
+            print(pick_renrakukoumoku_result)
+            add_schedule_kokyaku = pick_renrakukoumoku_result.get("values")[0][0]
+
+            # 型式
+            add_schedule_msm_katasiki = f"MA-{msm_katasiki_num}"
+            # 開始日: 実行日でよし
+            add_schedule_start_datetime = datetime.now().strftime("%Y/%m/%d")
+
+            # スケジュール表の一番後ろの行へ追加する
+            # テーブル検索範囲
+            table_search_range = "22年1月～12月!A5:M5"
+
+            append_values = [
+                [
+                    "aaa",
+                    "ミスミ",
+                    add_schedule_msm_katasiki,
+                    "",
+                    "",
+                    add_schedule_start_datetime,
+                    "",
+                    "",
+                    "",
+                    "?月末",
+                    "",
+                    "",
+                    add_schedule_kokyaku,
+                ]
+            ]
+
+            schedule_gsheet = (
+                sheet_service.spreadsheets()
+                .values()
+                .append(
+                    spreadsheetId=schedule_sheet_id,
+                    range=table_search_range,
+                    body={"values": append_values},
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                )
+            ).execute()
+
+            print(f"updated -> {schedule_gsheet.get('updates')}")
+
+            print("[Post Process...]")
+            # post-porcess: Googleドキュメントに一時保持した配管連絡項目を除去する
             delete_tmp_excel_result = (
                 drive_service.files()
                 .delete(fileId=upload_results.get("id"), fields="id")
                 .execute()
             )
-            print("delete file: ", delete_tmp_excel_result)
+            print("deleted file: ", delete_tmp_excel_result)
 
         except HttpError as error:
             # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
             print(f"An error occurred: {error}")
 
-        # ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
-        # 取得ができない場合は0000を用意
-        msm_katasiki_num = "0000"
-        if katasiki_matcher:=re.match(
-            r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
-            renrakukoumoku_excel_attachmenfile.get("filename"),
-        ):
-            msm_katasiki_num = katasiki_matcher.group(1)
-
+        exit()
         # ボイラープレートからディレクトリ生成
         # TODO:2022-12-09 この一連操作は別ライブラリ化して、単独で呼べるようにしたほうがいいかも
         print("[Generate template dirs]")
 
-        boilerplate_config = {"project_name": msm_katasiki_num, "haikan_pattern": "type_s"}
+        boilerplate_config = {
+            "project_name": msm_katasiki_num,
+            "haikan_pattern": "type_s",
+        }
         copier.run_copy(
             msm_gas_boilerplate_url,
             parent_dirpath / "export_files",
@@ -420,22 +493,30 @@ def main() -> None:
 
             # コピー先のファイル名を変更する
             template_suffix = "[ミスミ型番] のコピー"
-            renamed_filename = copy_template_results.get("name").replace(template_suffix, "0000")
+            renamed_filename = copy_template_results.get("name").replace(
+                template_suffix, "0000"
+            )
+            rename_body = {"name": renamed_filename}
+            rename_estimate_gsheet_result = (
+                drive_service.files()
+                .update(
+                    fileId=copy_template_results.get("id"),
+                    body=rename_body,
+                    fields="name",
+                )
+                .execute()
+            )
 
-            # print(renamed_filename)
-            # replaceでいいかな
-            rename_body = {"name":renamed_filename}
-            rename_estimate_gsheet_result = drive_service.files().update(
-                fileId=copy_template_results.get("id"),
-                body=rename_body,
-                fields='name'
-            ).execute()
-
-            print(f"estimate copy and renamed -> {rename_estimate_gsheet_result.get('name')}")
-
+            print(
+                f"estimate copy and renamed -> {rename_estimate_gsheet_result.get('name')}"
+            )
         except HttpError as error:
             # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
             print(f"An error occurred: {error}")
+
+        # スケジュール表への追加
+
+        # 配管連絡項目を開いて
 
     print("[End Process...]")
     exit()
