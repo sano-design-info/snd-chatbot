@@ -494,10 +494,8 @@ def main() -> None:
 
             # コピー先のファイル名を変更する
             template_suffix = "[ミスミ型番] のコピー"
-            renamed_filename = copy_template_results.get(
-                "name"
-            ).replace(  # TODO:2022-12-10 置き換え後の文字は正式に動かす場合は型式に足してる_testを外す
-                template_suffix, msm_katasiki_num + "_test"
+            renamed_filename = copy_template_results.get("name").replace(
+                template_suffix, msm_katasiki_num
             )
             rename_body = {"name": renamed_filename}
             rename_estimate_gsheet_result = (
