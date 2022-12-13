@@ -12,6 +12,7 @@ import re
 
 import copier
 import dateutil.parser
+import dateutil.tz
 import questionary
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -67,7 +68,8 @@ def encode_base64url(bytes_data) -> str:
 
 
 def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
-    return dateutil.parser.parse(gmail_datetimeformat)
+    persed_time = dateutil.parser.parse(gmail_datetimeformat)
+    return persed_time.astimezone(dateutil.tz.gettz("Asia/Tokyo"))
 
 
 def save_attachment_file(
