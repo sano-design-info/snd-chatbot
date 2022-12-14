@@ -24,6 +24,12 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
+# import sys
+
+# sys.path.append("../helper")
+
+import helper.google_api_auth_helper as google_api_auth_helper
+
 # load config
 load_dotenv()
 
@@ -132,19 +138,7 @@ def main() -> None:
 
     # TODO:2022-12-10 ここのサービス取得までを一つのモジュールにして、外に出す。
     # この環境で見積書作成も行うので、google apiのサービス生成をするヘルパーモジュールを作る
-    creds = None
-    if token_save_path.exists():
-        creds = Credentials.from_authorized_user_file(token_save_path, SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(cred_json, SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with token_save_path.open("w") as token:
-            token.write(creds.to_json())
+    creds = google_api_auth_helper.get_cledential()
 
     messages: list[ExpandedMessageItem] = []
     try:
