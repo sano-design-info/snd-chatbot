@@ -242,6 +242,8 @@ def main() -> None:
             )
         ).get("parts")
 
+    # メール印刷用HTML生成
+    # TODO:2022-12-14 ここではメールのheader, payloadがあればよさそう。ExpandedMessageItemが引っ張れればよさそうかな
     messages_text_parts = [i for i in message_body_parts if "text" in i.get("mimeType")]
 
     b64dec_msg_byte = decode_base64url(messages_text_parts[1].get("body").get("data"))
@@ -294,6 +296,7 @@ def main() -> None:
                 msg_img.get("body").get("attachmentId"),
             )
     # 添付ファイルの保持
+    # TODO:2022-12-14 ここは上のメールの情報保持に入れてしまう
     message_attachmentfiles = [
         i
         for i in selected_message.payload.get("parts")
@@ -310,6 +313,7 @@ def main() -> None:
             msg_attach.get("body").get("attachmentId"),
         )
 
+    # TODO:2022-12-14 連絡項目pdf生成は、Excelファイルを探すことでOK。名前はファイル名から取り出す
     print("[Generate Excel Printable PDF]")
     # 連絡項目の印刷用PDFファイル生成
     renrakukoumoku_excel_attachmenfile = next(
@@ -374,8 +378,9 @@ def main() -> None:
 
             renrakukoumoku_gsheet_id = upload_results.get("id")
             print(f"gsheet id : {renrakukoumoku_gsheet_id}")
+
             # 配管連絡項目から必要な情報を取り出して、スケジュール表を更新
-            # TODO:2022-12-10 ここも必要な情報を取り出したら後で行うようにする
+            # TODO:2022-12-14 ボイラープレートはExcelファイルのファイルパスから型式を取り出す
 
             # ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
             # 取得ができない場合は0000を用意
@@ -470,6 +475,7 @@ def main() -> None:
 
         # TODO:2022-12-09
         # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
+        # TODO:2022-12-14 ここでは型式が必要なので添付ファイルからExcelファイルを探してファイル名を取得する
         try:
             # UPPER/LOWER RHLH対応はここでは行わずにしておく（ボイラープレートと同じ対応）
             copy_template_results = (
