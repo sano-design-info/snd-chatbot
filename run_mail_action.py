@@ -22,11 +22,7 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
-# import sys
-
-# sys.path.append("../helper")
-
-import helper.google_api_auth_helper as google_api_auth_helper
+from helper import google_api_helper
 
 # load config
 load_dotenv()
@@ -41,6 +37,7 @@ msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
 
 mimetype_gsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+gsheet_tmmp_dir_ids = os.environ.get("GSHEET_TMMP_DIR_IDS")
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
@@ -134,7 +131,7 @@ class ExpandedMessageItem:
 def main() -> None:
     print("[Start Process...]")
 
-    google_creds: Credentials = google_api_auth_helper.get_cledential(SCOPES)
+    google_creds: Credentials = google_api_helper.get_cledential(SCOPES)
 
     messages: list[ExpandedMessageItem] = []
     try:
@@ -324,7 +321,6 @@ def main() -> None:
 
     # print(renrakukoumoku_excel_attachmenfile)
 
-    # exit()
     if renrakukoumoku_excel_attachmenfile:
         # ExcelファイルをPDFに変換する
         target_filepath = export_dirpath / renrakukoumoku_excel_attachmenfile.get(
@@ -341,9 +337,7 @@ def main() -> None:
         file_metadata = {
             "name": target_filepath.name,
             "mimeType": "application/vnd.google-apps.spreadsheet",
-            "parents": [
-                "1f0efE1nKIodvUBQ_rB5GjZlyqwDlglI_"
-            ],  # TODO:2022-12-10 定数 -> envへ
+            "parents": gsheet_tmmp_dir_ids,  # TODO:2022-12-10 定数 -> envへ
         }
 
         try:
