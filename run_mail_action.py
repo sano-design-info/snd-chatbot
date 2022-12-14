@@ -57,7 +57,7 @@ SCOPES = [
 ]
 
 # generate Path
-parent_dirpath = Path(__file__).parents[1]
+parent_dirpath = Path(__file__).parents[0]
 export_dirpath = parent_dirpath / "export_files"
 export_dirpath.mkdir(exist_ok=True)
 
@@ -138,7 +138,7 @@ def main() -> None:
 
     # TODO:2022-12-10 ここのサービス取得までを一つのモジュールにして、外に出す。
     # この環境で見積書作成も行うので、google apiのサービス生成をするヘルパーモジュールを作る
-    creds = google_api_auth_helper.get_cledential()
+    creds = google_api_auth_helper.get_cledential(SCOPES)
 
     messages: list[ExpandedMessageItem] = []
     try:
@@ -261,7 +261,7 @@ def main() -> None:
     # jinja2埋込
     # テンプレート読み込み
     env = Environment(
-        loader=FileSystemLoader(str(Path(__file__).absolute().parent), encoding="utf8")
+        loader=FileSystemLoader(str((parent_dirpath / "prepare")), encoding="utf8")
     )
     tmpl = env.get_template("export.html.jinja")
 
