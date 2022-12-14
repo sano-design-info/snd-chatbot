@@ -16,9 +16,7 @@ import dateutil.tz
 import questionary
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -136,14 +134,12 @@ class ExpandedMessageItem:
 def main() -> None:
     print("[Start Process...]")
 
-    # TODO:2022-12-10 ここのサービス取得までを一つのモジュールにして、外に出す。
-    # この環境で見積書作成も行うので、google apiのサービス生成をするヘルパーモジュールを作る
-    creds = google_api_auth_helper.get_cledential(SCOPES)
+    google_creds: Credentials = google_api_auth_helper.get_cledential(SCOPES)
 
     messages: list[ExpandedMessageItem] = []
     try:
         # Call the Gmail API
-        service = build("gmail", "v1", credentials=creds)
+        service = build("gmail", "v1", credentials=google_creds)
 
         # スレッド検索
         thread_results = (
@@ -351,7 +347,7 @@ def main() -> None:
         }
 
         try:
-            drive_service = build("drive", "v3", credentials=creds)
+            drive_service = build("drive", "v3", credentials=google_creds)
 
             # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
             upload_results = (
@@ -398,7 +394,7 @@ def main() -> None:
             gsheet_range_enduser = "D10"
             # 顧客
             gsheet_range_kokyaku = "D6"
-            sheet_service = build("sheets", "v4", credentials=creds)
+            sheet_service = build("sheets", "v4", credentials=google_creds)
             pick_renrakukoumoku_result = (
                 sheet_service.spreadsheets()
                 .values()

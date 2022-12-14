@@ -19,7 +19,7 @@ cred_json = parent_dirpath / cred_filepath
 # この環境で見積書作成も行うので、google apiのサービス生成をするヘルパーモジュールを作る
 
 
-def get_cledential(scopes: list[str]):
+def get_cledential(scopes: list[str]) -> Credentials:
     creds = None
     if token_save_path.exists():
         creds = Credentials.from_authorized_user_file(token_save_path, scopes)
