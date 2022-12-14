@@ -15,9 +15,6 @@ cred_filepath = os.environ.get("CRED_FILEPATH")
 token_save_path = parent_dirpath / "token.json"
 cred_json = parent_dirpath / cred_filepath
 
-# TODO:2022-12-10 ここのサービス取得までを一つのモジュールにして、外に出す。
-# この環境で見積書作成も行うので、google apiのサービス生成をするヘルパーモジュールを作る
-
 
 def get_cledential(scopes: list[str]) -> Credentials:
     creds = None
