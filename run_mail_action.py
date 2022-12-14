@@ -462,9 +462,11 @@ def main() -> None:
         }
         copier.run_copy(
             msm_gas_boilerplate_url,
-            parent_dirpath / "export_files",
+            export_dirpath,
             data=boilerplate_config,
         )
+
+        # TODO:2022-12-14 添付ファイルをコピーする
 
         # TODO:2022-12-09
         # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
