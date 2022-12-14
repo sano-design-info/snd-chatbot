@@ -32,12 +32,13 @@ target_userid = os.environ.get("GMAIL_USER_ID")
 
 estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
 schedule_sheet_id = os.environ.get("SCHEDULE_SHEET_ID")
-
 msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
+gsheet_tmmp_dir_ids = os.environ.get("GSHEET_TMP_DIR_IDS")
+
+# テーブル検索範囲
+table_search_range = os.environ.get("TABLE_SEARCH_RANGE")
 
 mimetype_gsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-gsheet_tmmp_dir_ids = os.environ.get("GSHEET_TMMP_DIR_IDS")
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
@@ -337,7 +338,7 @@ def main() -> None:
         file_metadata = {
             "name": target_filepath.name,
             "mimeType": "application/vnd.google-apps.spreadsheet",
-            "parents": gsheet_tmmp_dir_ids,  # TODO:2022-12-10 定数 -> envへ
+            "parents": gsheet_tmmp_dir_ids,
         }
 
         try:
@@ -404,9 +405,6 @@ def main() -> None:
             add_schedule_start_datetime = datetime.now().strftime("%Y/%m/%d")
 
             # スケジュール表の一番後ろの行へ追加する
-            # テーブル検索範囲
-            # TODO:2022-12-10 定数 -> envへ
-            table_search_range = "22年1月～12月!A5:M5"
 
             append_values = [
                 [
