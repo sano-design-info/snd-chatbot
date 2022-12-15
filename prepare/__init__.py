@@ -21,12 +21,19 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
+from dateutil.relativedelta import relativedelta
+import openpyxl
 
 from helper import google_api_helper
 
 # load config
 load_dotenv()
+estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
+schedule_sheet_id = os.environ.get("SCHEDULE_SHEET_ID")
+msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
 gsheet_tmmp_dir_ids = os.environ.get("GSHEET_TMP_DIR_IDS")
+
+table_search_range = os.environ.get("TABLE_SEARCH_RANGE")
 
 # Path
 parent_dirpath = Path(__file__).parents[1]
@@ -125,7 +132,9 @@ class ExpandedMessageItem:
             ).get("parts")
 
 
-def generate_mail_printhtml(messageitem: ExpandedMessageItem, export_dirpath: Path):
+def generate_mail_printhtml(
+    messageitem: ExpandedMessageItem, export_dirpath: Path
+) -> None:
     # メール印刷用HTML生成
     # TODO:2022-12-14 ここではメールのheader, payloadがあればよさそう。ExpandedMessageItemが引っ張れればよさそうかな
     messages_text_parts = [
@@ -168,74 +177,79 @@ def generate_pdf_byrenrakuexcel(
     attachment_dirpath: Path,
     export_dirpath: Path,
     google_creds: Credentials,
-):
+) -> None:
     # 連絡項目の印刷用PDFファイル生成
     mimetype_xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
 
-    if target_filepath:
-        # ExcelファイルをPDFに変換する
-        media = MediaFileUpload(
-            target_filepath,
-            mimetype=mimetype_xlsx,
-            resumable=True,
+    if not target_filepath:
+        print("cant generate_pdf_byrenrakuexcel")
+        return None
+
+    # ExcelファイルをPDFに変換する
+    media = MediaFileUpload(
+        target_filepath,
+        mimetype=mimetype_xlsx,
+        resumable=True,
+    )
+
+    file_metadata = {
+        "name": target_filepath.name,
+        "mimeType": "application/vnd.google-apps.spreadsheet",
+        "parents": gsheet_tmmp_dir_ids,
+    }
+
+    try:
+        drive_service = build("drive", "v3", credentials=google_creds)
+
+        # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
+        upload_results = (
+            drive_service.files().create(body=file_metadata, media_body=media).execute()
         )
 
-        file_metadata = {
-            "name": target_filepath.name,
-            "mimeType": "application/vnd.google-apps.spreadsheet",
-            "parents": gsheet_tmmp_dir_ids,
-        }
+        print(upload_results)
+        # print(upload_results.get("id"))
 
-        try:
-            drive_service = build("drive", "v3", credentials=google_creds)
+        # pdfファイルを取りに行ってみる
+        dl_request = drive_service.files().export_media(
+            fileId=upload_results.get("id"), mimeType="application/pdf"
+        )
+        file = io.BytesIO()
+        downloader = MediaIoBaseDownload(file, dl_request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            print(f"Download {int(status.progress() * 100)}.")
 
-            # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
-            upload_results = (
-                drive_service.files()
-                .create(body=file_metadata, media_body=media)
-                .execute()
-            )
+        with (export_dirpath / Path("./export_excel.pdf")).open(
+            "wb"
+        ) as export_exceltopdf:
+            export_exceltopdf.write(file.getvalue())
 
-            print(upload_results)
-            # print(upload_results.get("id"))
+        print("[Post Process...]")
+        # post-porcess: Googleドキュメントに一時保持した配管連絡項目を除去する
+        delete_tmp_excel_result = (
+            drive_service.files()
+            .delete(fileId=upload_results.get("id"), fields="id")
+            .execute()
+        )
+        print("deleted file: ", delete_tmp_excel_result)
 
-            # pdfファイルを取りに行ってみる
-            dl_request = drive_service.files().export_media(
-                fileId=upload_results.get("id"), mimeType="application/pdf"
-            )
-            file = io.BytesIO()
-            downloader = MediaIoBaseDownload(file, dl_request)
-            done = False
-            while done is False:
-                status, done = downloader.next_chunk()
-                print(f"Download {int(status.progress() * 100)}.")
-
-            with (export_dirpath / Path("./export_excel.pdf")).open(
-                "wb"
-            ) as export_exceltopdf:
-                export_exceltopdf.write(file.getvalue())
-
-            print("[Post Process...]")
-            # post-porcess: Googleドキュメントに一時保持した配管連絡項目を除去する
-            delete_tmp_excel_result = (
-                drive_service.files()
-                .delete(fileId=upload_results.get("id"), fields="id")
-                .execute()
-            )
-            print("deleted file: ", delete_tmp_excel_result)
-
-        except HttpError as error:
-            # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
-            print(f"An error occurred: {error}")
-
-    pass
+    except HttpError as error:
+        # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
+        print(f"An error occurred: {error}")
 
 
-def generate_projectdir(renrakukoumoku_filepath: Path):
+def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
     # TODO:2022-12-15 ファイルパスから型式を取り出す
-    msm_katasiki_num = ""
+    target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
+    if not target_filepath:
+        print("cant create projectdir")
+        return None
+
+    msm_katasiki_num = pick_msm_katasiki_by_renrakukoumoku_filename(target_filepath)
+
     # ボイラープレートからディレクトリ生成
     # TODO:2022-12-09 この一連操作は別ライブラリ化して、単独で呼べるようにしたほうがいいかも
     print("[Generate template dirs]")
@@ -251,53 +265,60 @@ def generate_projectdir(renrakukoumoku_filepath: Path):
     )
 
     # TODO:2022-12-14 添付ファイルをコピーする
-    pass
 
 
-def add_schedule_spreadsheet(renrakukoumoku_filepath: Path):
+def add_schedule_spreadsheet(
+    attachment_dirpath: Path, export_dirpath: Path, google_creds: Credentials
+) -> None:
+    target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
+    if not target_filepath:
+        print("cant add schedule")
+        return None
 
-    # TODO:2022-12-15 ファイルパスから型式を取り出す
-    msm_katasiki_num = ""
+    msm_katasiki_num = pick_msm_katasiki_by_renrakukoumoku_filename(target_filepath)
 
     # エンドユーザー: 今は列がないので登録しない
-    gsheet_range_enduser = "D10"
+    renrakukoumoku_range_enduser = "D10"
     # 顧客
-    gsheet_range_kokyaku = "D6"
-    sheet_service = build("sheets", "v4", credentials=google_creds)
-    pick_renrakukoumoku_result = (
-        sheet_service.spreadsheets()
-        .values()
-        .get(spreadsheetId=renrakukoumoku_gsheet_id, range=gsheet_range_kokyaku)
-        .execute()
-    )
-    print(pick_renrakukoumoku_result)
-    add_schedule_kokyaku = pick_renrakukoumoku_result.get("values")[0][0]
+    renrakukoumoku_range_kokyaku = "D6"
+
+    # openpyxlで必要な位置から値を取り出す
+    renrakukoumoku_wb = openpyxl.load_workbook(target_filepath).active
+    renrakukoumoku_ws = renrakukoumoku_wb.active
+    add_schedule_kokyaku = renrakukoumoku_ws[renrakukoumoku_range_kokyaku]
+
+    renrakukoumoku_wb.close()
 
     # 型式
     add_schedule_msm_katasiki = f"MA-{msm_katasiki_num}"
     # 開始日: 実行日でよし
     add_schedule_start_datetime = datetime.now().strftime("%Y/%m/%d")
-
-    # スケジュール表の一番後ろの行へ追加する
+    # 振込タイミング:開始日の来月を基本にする。ずれる場合は手動で修正する
+    add_schedule_hurikomiduki = add_schedule_start_datetime.replace(
+        day=1
+    ) + relativedelta(months=1)
 
     append_values = [
         [
-            "aaa",
+            "=ROW()+4",
             "ミスミ",
             add_schedule_msm_katasiki,
-            "",
+            "友希",
             "",
             add_schedule_start_datetime,
             "",
             "",
             "",
-            "?月末",
+            f"{add_schedule_hurikomiduki.month}月末",
             "",
             "",
             add_schedule_kokyaku,
         ]
     ]
 
+    sheet_service = build("sheets", "v4", credentials=google_creds)
+
+    # スケジュール表の一番後ろの行へ追加する
     schedule_gsheet = (
         sheet_service.spreadsheets()
         .values()
@@ -312,15 +333,24 @@ def add_schedule_spreadsheet(renrakukoumoku_filepath: Path):
 
     print(f"updated -> {schedule_gsheet.get('updates')}")
 
-    pass
 
-
-def generate_estimate_calcsheet():
+def generate_estimate_calcsheet(
+    attachment_dirpath: Path, google_creds: Credentials
+) -> None:
 
     # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
-    # TODO:2022-12-14 ここでは型式が必要なので添付ファイルからExcelファイルを探してファイル名を取得する
+    # TODO:2022-12-15 ここは情緒なんだけど外に出す必要性があんまりないので今はそのまま。
+
+    target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
+    if not target_filepath:
+        print("cant add schedule")
+        return None
+
+    msm_katasiki_num = pick_msm_katasiki_by_renrakukoumoku_filename(target_filepath)
+
     try:
-        # UPPER/LOWER RHLH対応はここでは行わずにしておく（ボイラープレートと同じ対応）
+        drive_service = build("drive", "v3", credentials=google_creds)
+
         copy_template_results = (
             drive_service.files()
             .copy(fileId=estimate_template_gsheet_id, fields="id,name")
@@ -349,5 +379,3 @@ def generate_estimate_calcsheet():
     except HttpError as error:
         # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
         print(f"An error occurred: {error}")
-
-    pass
