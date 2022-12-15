@@ -35,18 +35,8 @@ from prepare import (
 # load config
 load_dotenv()
 
-cred_filepath = os.environ.get("CRED_FILEPATH")
+# cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
-
-estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
-schedule_sheet_id = os.environ.get("SCHEDULE_SHEET_ID")
-msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
-gsheet_tmmp_dir_ids = os.environ.get("GSHEET_TMP_DIR_IDS")
-
-# テーブル検索範囲
-table_search_range = os.environ.get("TABLE_SEARCH_RANGE")
-
-mimetype_gsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = [
@@ -67,9 +57,6 @@ export_dirpath.mkdir(exist_ok=True)
 
 attachment_files_dirpath = export_dirpath / "attachments"
 attachment_files_dirpath.mkdir(exist_ok=True)
-
-token_save_path = parent_dirpath / "token.json"
-cred_json = parent_dirpath / cred_filepath
 
 
 def decode_base64url(s) -> bytes:
@@ -189,34 +176,6 @@ def main() -> None:
         print("[Cancell Process...]")
         exit()
 
-    # TODO:2022-12-15 この部分も実はExpandedMessageItem側に入れればいいか
-    # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
-    # relative> altanative の手順で掘る。mixedは一番上で考慮しているのでここでは行わない
-    # message_body_related = {}
-    # message_body_parts = next(
-    #     (
-    #         i
-    #         for i in selected_message.payload.get("parts")
-    #         if i.get("mimeType") == "multipart/alternative"
-    #     ),
-    #     {},
-    # ).get("parts", [])
-    # if not message_body_parts:
-    #     message_body_related = next(
-    #         (
-    #             i
-    #             for i in selected_message.payload.get("parts")
-    #             if i.get("mimeType") == "multipart/related"
-    #         )
-    #     )
-    #     message_body_parts = next(
-    #         (
-    #             i
-    #             for i in message_body_related.get("parts")
-    #             if i.get("mimeType") == "multipart/alternative"
-    #         )
-    #     ).get("parts")
-
     print("[Save Attachment file and mail image]")
     # メール本文にimgファイルがある場合はそれを取り出す
     # multipart/relatedの時にあるので、それを狙い撃ちで取る
@@ -237,13 +196,11 @@ def main() -> None:
                 msg_img.get("body").get("attachmentId"),
             )
     # 添付ファイルの保持
-    # TODO:2022-12-14 ここは上のメールの情報保持に入れてしまう
     message_attachmentfiles = [
         i
         for i in selected_message.payload.get("parts")
         if "application" in i.get("mimeType")
     ]
-
     # print(message_attachmentfiles)
 
     for msg_attach in message_attachmentfiles:
