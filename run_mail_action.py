@@ -35,11 +35,18 @@ from prepare import (
 # load config
 load_dotenv()
 
-# cred_filepath = os.environ.get("CRED_FILEPATH")
 target_userid = os.environ.get("GMAIL_USER_ID")
 
+# generate Path
+parent_dirpath = Path(__file__).parents[0]
+export_dirpath = parent_dirpath / "export_files"
+export_dirpath.mkdir(exist_ok=True)
+
+attachment_files_dirpath = export_dirpath / "attachments"
+attachment_files_dirpath.mkdir(exist_ok=True)
+
 # If modifying these scopes, delete the file token.json.
-SCOPES = [
+GOOGLE_API_SCOPES = [
     "https://mail.google.com/",
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -49,14 +56,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/drive.appdata",
 ]
-
-# generate Path
-parent_dirpath = Path(__file__).parents[0]
-export_dirpath = parent_dirpath / "export_files"
-export_dirpath.mkdir(exist_ok=True)
-
-attachment_files_dirpath = export_dirpath / "attachments"
-attachment_files_dirpath.mkdir(exist_ok=True)
 
 
 def decode_base64url(s) -> bytes:
@@ -95,7 +94,7 @@ def save_attachment_file(
 def main() -> None:
     print("[Start Process...]")
 
-    google_creds: Credentials = google_api_helper.get_cledential(SCOPES)
+    google_creds: Credentials = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
 
     messages: list[ExpandedMessageItem] = []
     try:
