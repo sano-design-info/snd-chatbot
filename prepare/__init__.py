@@ -45,7 +45,7 @@ def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
     return persed_time.astimezone(dateutil.tz.gettz("Asia/Tokyo"))
 
 
-def pick_msm_katasiki_by_renrakukoumoku_filename(filepath):
+def pick_msm_katasiki_by_renrakukoumoku_filename(filepath: Path) -> str:
     # 配管連絡項目から必要な情報を取り出して、スケジュール表を更新
     # TODO:2022-12-14 ボイラープレートはExcelファイルのファイルパスから型式を取り出す
 
@@ -54,7 +54,7 @@ def pick_msm_katasiki_by_renrakukoumoku_filename(filepath):
     msm_katasiki_num = "0000"
     if katasiki_matcher := re.match(
         r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
-        renrakukoumoku_excel_attachmenfile.get("filename"),
+        str(filepath.name),
     ):
         msm_katasiki_num = katasiki_matcher.group(1)
 
@@ -165,30 +165,19 @@ def generate_mail_printhtml(messageitem: ExpandedMessageItem, export_dirpath: Pa
 
 
 def generate_pdf_byrenrakuexcel(
-    messageitem: ExpandedMessageItem, export_dirpath: Path, google_creds: Credentials
+    attachment_dirpath: Path,
+    export_dirpath: Path,
+    google_creds: Credentials,
 ):
-    # TODO:2022-12-15 ここはexportのパスからファイルを探して対応する。Gmail Messageのdictはいらない
-    mimetype_xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     # 連絡項目の印刷用PDFファイル生成
-    renrakukoumoku_excel_attachmenfile = next(
-        (
-            i
-            for i in messageitem.payload.get("parts")
-            if mimetype_xlsx in i.get("mimeType")
-        )
-    )
+    mimetype_xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
 
-    # print(renrakukoumoku_excel_attachmenfile)
-    if renrakukoumoku_excel_attachmenfile:
+    if target_filepath:
         # ExcelファイルをPDFに変換する
-        target_filepath = export_dirpath / renrakukoumoku_excel_attachmenfile.get(
-            "filename"
-        )
-        upload_mimetype = mimetype_xlsx
-
         media = MediaFileUpload(
             target_filepath,
-            mimetype=upload_mimetype,
+            mimetype=mimetype_xlsx,
             resumable=True,
         )
 
@@ -209,7 +198,7 @@ def generate_pdf_byrenrakuexcel(
             )
 
             print(upload_results)
-            print(upload_results.get("id"))
+            # print(upload_results.get("id"))
 
             # pdfファイルを取りに行ってみる
             dl_request = drive_service.files().export_media(

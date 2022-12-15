@@ -23,7 +23,11 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
 from helper import google_api_helper
-from prepare import ExpandedMessageItem
+from prepare import (
+    ExpandedMessageItem,
+    generate_mail_printhtml,
+    generate_pdf_byrenrakuexcel,
+)
 
 # load config
 load_dotenv()
@@ -59,6 +63,7 @@ export_dirpath = parent_dirpath / "export_files"
 export_dirpath.mkdir(exist_ok=True)
 
 attachment_files_dirpath = export_dirpath / "attachments"
+attachment_files_dirpath.mkdir(exist_ok=True)
 
 token_save_path = parent_dirpath / "token.json"
 cred_json = parent_dirpath / cred_filepath
@@ -244,46 +249,15 @@ def main() -> None:
             msg_attach.get("body").get("attachmentId"),
         )
 
-    print("[Generate Mail Printable PDF]")
     # メール印刷用HTML生成
-    # TODO:2022-12-14 ここではメールのheader, payloadがあればよさそう。ExpandedMessageItemが引っ張れればよさそうかな
-    messages_text_parts = [i for i in message_body_parts if "text" in i.get("mimeType")]
-
-    b64dec_msg_byte = decode_base64url(messages_text_parts[1].get("body").get("data"))
-
-    # imgタグを除去する
-    mail_html_bs4 = BeautifulSoup(b64dec_msg_byte, "html.parser")
-    only_body_tags = mail_html_bs4.body
-    for t in only_body_tags.find_all("img"):
-        t.decompose()
-
-    # jinja2埋込
-    # テンプレート読み込み
-    env = Environment(
-        loader=FileSystemLoader(str((parent_dirpath / "prepare")), encoding="utf8")
-    )
-    tmpl = env.get_template("export.html.jinja")
-
-    # 設定ファイル読み込み
-    params = {
-        "export_html": only_body_tags,
-        "message_title": html.escape(selected_message.title),
-        "message_from_addresss": html.escape(selected_message.from_addresss),
-        "message_cc_address": html.escape(selected_message.cc_address),
-        "message_datetime": selected_message.datetime_,
-    }
-    # レンダリングして出力
-    rendered_html = tmpl.render(params)
-    # print(rendered_html)
-
-    with (export_dirpath / Path("./export_mail.html")).open(
-        "w", encoding="utf8"
-    ) as exp_mail_hmtl:
-        exp_mail_hmtl.write(rendered_html)
+    print("[Generate Mail Printable PDF]")
+    generate_mail_printhtml(selected_message, export_dirpath)
 
     # TODO:2022-12-14 連絡項目pdf生成は、Excelファイルを探すことでOK。名前はファイル名から取り出す
     print("[Generate Excel Printable PDF]")
     # 連絡項目の印刷用PDFファイル生成
+    generate_pdf_byrenrakuexcel(attachment_files_dirpath, export_dirpath, google_creds)
+
     renrakukoumoku_excel_attachmenfile = next(
         (
             i
