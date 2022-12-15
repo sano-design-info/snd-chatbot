@@ -196,7 +196,7 @@ def main() -> None:
     generate_projectdir(attachment_files_dirpath, export_dirpath)
 
     print("[append schedule]")
-    add_schedule_spreadsheet(attachment_files_dirpath, export_dirpath, google_creds)
+    add_schedule_spreadsheet(attachment_files_dirpath, google_creds)
 
     print("[add estimate calcsheet]")
     generate_estimate_calcsheet(attachment_files_dirpath, google_creds)

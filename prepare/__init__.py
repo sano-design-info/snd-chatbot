@@ -226,7 +226,7 @@ def generate_pdf_byrenrakuexcel(
         ) as export_exceltopdf:
             export_exceltopdf.write(file.getvalue())
 
-        print("[Post Process...]")
+        # print("[Post Process...]")
         # post-porcess: Googleドキュメントに一時保持した配管連絡項目を除去する
         delete_tmp_excel_result = (
             drive_service.files()
@@ -242,7 +242,10 @@ def generate_pdf_byrenrakuexcel(
 
 def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
-    # TODO:2022-12-15 ファイルパスから型式を取り出す
+    export_project_dir = export_dirpath / "proj_dir"
+    export_project_dir.mkdir(exist_ok=True)
+
+    # ファイルパスから型式を取り出す
     target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
     if not target_filepath:
         print("cant create projectdir")
@@ -251,16 +254,13 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
     msm_katasiki_num = pick_msm_katasiki_by_renrakukoumoku_filename(target_filepath)
 
     # ボイラープレートからディレクトリ生成
-    # TODO:2022-12-09 この一連操作は別ライブラリ化して、単独で呼べるようにしたほうがいいかも
-    print("[Generate template dirs]")
-
     boilerplate_config = {
         "project_name": msm_katasiki_num,
         "haikan_pattern": "type_s",
     }
     copier.run_copy(
         msm_gas_boilerplate_url,
-        export_dirpath,
+        export_project_dir,
         data=boilerplate_config,
     )
 
@@ -268,7 +268,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
 
 def add_schedule_spreadsheet(
-    attachment_dirpath: Path, export_dirpath: Path, google_creds: Credentials
+    attachment_dirpath: Path, google_creds: Credentials
 ) -> None:
     target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
     if not target_filepath:
@@ -283,24 +283,23 @@ def add_schedule_spreadsheet(
     renrakukoumoku_range_kokyaku = "D6"
 
     # openpyxlで必要な位置から値を取り出す
-    renrakukoumoku_wb = openpyxl.load_workbook(target_filepath).active
+    renrakukoumoku_wb = openpyxl.load_workbook(target_filepath)
     renrakukoumoku_ws = renrakukoumoku_wb.active
-    add_schedule_kokyaku = renrakukoumoku_ws[renrakukoumoku_range_kokyaku]
+    add_schedule_kokyaku = renrakukoumoku_ws[renrakukoumoku_range_kokyaku].value
 
     renrakukoumoku_wb.close()
 
     # 型式
     add_schedule_msm_katasiki = f"MA-{msm_katasiki_num}"
     # 開始日: 実行日でよし
-    add_schedule_start_datetime = datetime.now().strftime("%Y/%m/%d")
+    now_datetime = datetime.now()
+    add_schedule_start_datetime = now_datetime.strftime("%Y/%m/%d")
     # 振込タイミング:開始日の来月を基本にする。ずれる場合は手動で修正する
-    add_schedule_hurikomiduki = add_schedule_start_datetime.replace(
-        day=1
-    ) + relativedelta(months=1)
+    add_schedule_hurikomiduki = now_datetime.replace(day=1) + relativedelta(months=1)
 
     append_values = [
         [
-            "=ROW()+4",
+            "=row() - 5",
             "ミスミ",
             add_schedule_msm_katasiki,
             "友希",
@@ -318,6 +317,9 @@ def add_schedule_spreadsheet(
 
     sheet_service = build("sheets", "v4", credentials=google_creds)
 
+    # print(schedule_sheet_id, " ", table_search_range, "", )
+    # print(append_values)
+
     # スケジュール表の一番後ろの行へ追加する
     schedule_gsheet = (
         sheet_service.spreadsheets()
@@ -331,7 +333,7 @@ def add_schedule_spreadsheet(
         )
     ).execute()
 
-    print(f"updated -> {schedule_gsheet.get('updates')}")
+    print(f"schedule updated -> {schedule_gsheet.get('updates')}")
 
 
 def generate_estimate_calcsheet(
