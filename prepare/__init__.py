@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from pprint import pprint
 import re
+import shutil
 
 import copier
 import dateutil.parser
@@ -264,7 +265,11 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
         data=boilerplate_config,
     )
 
-    # TODO:2022-12-14 添付ファイルをコピーする
+    # TODO:2022-12-16 copierの結果からファイルパスって出せない？かを調べてみる。
+    # projectディレクトリ名が出せないとその中の資料フォルダへアクセスできないので
+
+    # 添付ファイルをコピーする
+    shutil.copytree(attachment_dirpath, (export_project_dir / "資料"))
 
 
 def add_schedule_spreadsheet(
