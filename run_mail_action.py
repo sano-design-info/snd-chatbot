@@ -1,26 +1,13 @@
 import base64
-import html
-import io
 import itertools
 import os
-import os.path
-from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
-from pprint import pprint
-import re
 
-import copier
-import dateutil.parser
-import dateutil.tz
 import questionary
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-from jinja2 import Environment, FileSystemLoader
 
 from helper import google_api_helper
 from prepare import (
@@ -56,19 +43,6 @@ GOOGLE_API_SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/drive.appdata",
 ]
-
-
-def decode_base64url(s) -> bytes:
-    return base64.urlsafe_b64decode(s) + b"=" * (4 - (len(s) % 4))
-
-
-def encode_base64url(bytes_data) -> str:
-    return base64.urlsafe_b64encode(bytes_data).rstrip(b"=")
-
-
-def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
-    persed_time = dateutil.parser.parse(gmail_datetimeformat)
-    return persed_time.astimezone(dateutil.tz.gettz("Asia/Tokyo"))
 
 
 def save_attachment_file(
