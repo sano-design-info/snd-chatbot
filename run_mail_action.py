@@ -23,6 +23,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
 from helper import google_api_helper
+from prepare import ExpandedMessageItem
 
 # load config
 load_dotenv()
@@ -57,6 +58,8 @@ parent_dirpath = Path(__file__).parents[0]
 export_dirpath = parent_dirpath / "export_files"
 export_dirpath.mkdir(exist_ok=True)
 
+attachment_files_dirpath = export_dirpath / "attachments"
+
 token_save_path = parent_dirpath / "token.json"
 cred_json = parent_dirpath / cred_filepath
 
@@ -89,44 +92,9 @@ def save_attachment_file(
         .execute()
     )
     # print(attachfile_data)
-    print((export_dirpath / Path(filename)))
-    with (export_dirpath / Path(filename)).open("wb") as msg_img_file:
-        msg_img_file.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
-
-
-@dataclass
-class ExpandedMessageItem:
-    "メッセージ一覧の選択や、メール回りで使うときに利用する"
-    gmail_message: dict
-    payload: dict = field(init=False)
-    headers: dict = field(init=False)
-
-    id: str = field(init=False)
-    title: str = field(init=False)
-    from_addresss: str = field(init=False)
-    cc_address: str = field(init=False)
-    datetime_: datetime = field(init=False)
-
-    def __post_init__(self):
-        self.payload = self.gmail_message.get("payload")
-        self.headers = self.payload.get("headers")
-
-        self.id = self.gmail_message.get("id")
-        self.title = next((i for i in self.headers if i.get("name") == "Subject")).get(
-            "value"
-        )
-
-        self.from_addresss = next(
-            (i for i in self.headers if i.get("name") == "From")
-        ).get("value")
-
-        self.cc_address = next((i for i in self.headers if i.get("name") == "CC")).get(
-            "value"
-        )
-
-        self.datetime_ = convert_gmail_datetimestr(
-            next((i for i in self.headers if i.get("name") == "Date")).get("value")
-        )
+    print((attachment_files_dirpath / Path(filename)))
+    with (attachment_files_dirpath / Path(filename)).open("wb") as attachmentfiile:
+        attachmentfiile.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
 
 
 def main() -> None:
@@ -213,8 +181,7 @@ def main() -> None:
         print("[Cancell Process...]")
         exit()
 
-    print("[Generate mail Printable PDF]")
-
+    # TODO:2022-12-15 この部分も実はExpandedMessageItem側に入れればいいか
     # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
     # relative> altanative の手順で掘る。mixedは一番上で考慮しているのでここでは行わない
     message_body_related = {}
@@ -241,42 +208,6 @@ def main() -> None:
                 if i.get("mimeType") == "multipart/alternative"
             )
         ).get("parts")
-
-    # メール印刷用HTML生成
-    # TODO:2022-12-14 ここではメールのheader, payloadがあればよさそう。ExpandedMessageItemが引っ張れればよさそうかな
-    messages_text_parts = [i for i in message_body_parts if "text" in i.get("mimeType")]
-
-    b64dec_msg_byte = decode_base64url(messages_text_parts[1].get("body").get("data"))
-
-    # imgタグを除去する
-    mail_html_bs4 = BeautifulSoup(b64dec_msg_byte, "html.parser")
-    only_body_tags = mail_html_bs4.body
-    for t in only_body_tags.find_all("img"):
-        t.decompose()
-
-    # jinja2埋込
-    # テンプレート読み込み
-    env = Environment(
-        loader=FileSystemLoader(str((parent_dirpath / "prepare")), encoding="utf8")
-    )
-    tmpl = env.get_template("export.html.jinja")
-
-    # 設定ファイル読み込み
-    params = {
-        "export_html": only_body_tags,
-        "message_title": html.escape(selected_message.title),
-        "message_from_addresss": html.escape(selected_message.from_addresss),
-        "message_cc_address": html.escape(selected_message.cc_address),
-        "message_datetime": selected_message.datetime_,
-    }
-    # レンダリングして出力
-    rendered_html = tmpl.render(params)
-    # print(rendered_html)
-
-    with (export_dirpath / Path("./export_mail.html")).open(
-        "w", encoding="utf8"
-    ) as exp_mail_hmtl:
-        exp_mail_hmtl.write(rendered_html)
 
     print("[Save Attachment file and mail image]")
     # メール本文にimgファイルがある場合はそれを取り出す
@@ -312,6 +243,43 @@ def main() -> None:
             selected_message.id,
             msg_attach.get("body").get("attachmentId"),
         )
+
+    print("[Generate Mail Printable PDF]")
+    # メール印刷用HTML生成
+    # TODO:2022-12-14 ここではメールのheader, payloadがあればよさそう。ExpandedMessageItemが引っ張れればよさそうかな
+    messages_text_parts = [i for i in message_body_parts if "text" in i.get("mimeType")]
+
+    b64dec_msg_byte = decode_base64url(messages_text_parts[1].get("body").get("data"))
+
+    # imgタグを除去する
+    mail_html_bs4 = BeautifulSoup(b64dec_msg_byte, "html.parser")
+    only_body_tags = mail_html_bs4.body
+    for t in only_body_tags.find_all("img"):
+        t.decompose()
+
+    # jinja2埋込
+    # テンプレート読み込み
+    env = Environment(
+        loader=FileSystemLoader(str((parent_dirpath / "prepare")), encoding="utf8")
+    )
+    tmpl = env.get_template("export.html.jinja")
+
+    # 設定ファイル読み込み
+    params = {
+        "export_html": only_body_tags,
+        "message_title": html.escape(selected_message.title),
+        "message_from_addresss": html.escape(selected_message.from_addresss),
+        "message_cc_address": html.escape(selected_message.cc_address),
+        "message_datetime": selected_message.datetime_,
+    }
+    # レンダリングして出力
+    rendered_html = tmpl.render(params)
+    # print(rendered_html)
+
+    with (export_dirpath / Path("./export_mail.html")).open(
+        "w", encoding="utf8"
+    ) as exp_mail_hmtl:
+        exp_mail_hmtl.write(rendered_html)
 
     # TODO:2022-12-14 連絡項目pdf生成は、Excelファイルを探すことでOK。名前はファイル名から取り出す
     print("[Generate Excel Printable PDF]")
