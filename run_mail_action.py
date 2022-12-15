@@ -15,7 +15,7 @@ from prepare import (
     add_schedule_spreadsheet,
     generate_estimate_calcsheet,
     generate_mail_printhtml,
-    generate_pdf_byrenrakuexcel,
+    generate_pdf_by_renrakukoumoku_excel,
     generate_projectdir,
 )
 
@@ -190,7 +190,9 @@ def main() -> None:
     generate_mail_printhtml(selected_message, export_dirpath)
 
     print("[Generate Excel Printable PDF]")
-    generate_pdf_byrenrakuexcel(attachment_files_dirpath, export_dirpath, google_creds)
+    generate_pdf_by_renrakukoumoku_excel(
+        attachment_files_dirpath, export_dirpath, google_creds
+    )
 
     print("[Generate template dirs]")
     generate_projectdir(attachment_files_dirpath, export_dirpath)

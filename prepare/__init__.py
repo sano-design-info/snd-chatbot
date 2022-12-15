@@ -173,7 +173,7 @@ def generate_mail_printhtml(
     pass
 
 
-def generate_pdf_byrenrakuexcel(
+def generate_pdf_by_renrakukoumoku_excel(
     attachment_dirpath: Path,
     export_dirpath: Path,
     google_creds: Credentials,
