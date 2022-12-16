@@ -21,6 +21,8 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
+from helper import extract_zip
+
 # load config
 load_dotenv()
 estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
@@ -265,17 +267,20 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
         "project_name": msm_katasiki_num,
         "haikan_pattern": "type_s",
     }
-    copier.run_copy(
+    generated_copier_worker = copier.run_copy(
         msm_gas_boilerplate_url,
         export_project_dir,
         data=boilerplate_config,
     )
 
-    # TODO:2022-12-16 copierの結果からファイルパスって出せない？かを調べてみる。
-    # projectディレクトリ名が出せないとその中の資料フォルダへアクセスできないので
+    # 添付ファイルを解凍する
+    for attachment_zfile in attachment_dirpath.glob("*.zip"):
+        extract_zip(attachment_zfile, attachment_dirpath)
 
     # 添付ファイルをコピーする
-    shutil.copytree(attachment_dirpath, (export_project_dir / "資料"))
+    # TODO:2022-12-16 プロジェクトフォルダの名称は環境変数化したほうがいいかも？
+    project_dir = generated_copier_worker.dst_path / f"ミスミ配管図MA-{msm_katasiki_num}納期 -"
+    shutil.copytree(attachment_dirpath, (project_dir / "資料"))
 
 
 def add_schedule_spreadsheet(
