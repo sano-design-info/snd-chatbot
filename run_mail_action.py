@@ -142,6 +142,10 @@ def main() -> None:
         "select msm gas mail message", choices=message_item_and_labels
     ).ask()
 
+    ask_generate_projectfile = questionary.confirm(
+        "generate projectfile?(not initial anken eg: MA-0000-1)", True
+    ).ask()
+
     # 選択後、処理開始していいか問い合わせして実行
     comefirm_check = questionary.confirm("run Process?", False).ask()
 
@@ -194,8 +198,11 @@ def main() -> None:
         attachment_files_dirpath, export_dirpath, google_creds
     )
 
-    print("[Generate template dirs]")
-    generate_projectdir(attachment_files_dirpath, export_dirpath)
+    if ask_generate_projectfile:
+        print("[Generate template dirs]")
+        generate_projectdir(attachment_files_dirpath, export_dirpath)
+    else:
+        print("[Not Generate template dirs]")
 
     print("[append schedule]")
     add_schedule_spreadsheet(attachment_files_dirpath, google_creds)
