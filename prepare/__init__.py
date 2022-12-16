@@ -275,7 +275,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
     # 添付ファイルを解凍する
     for attachment_zfile in attachment_dirpath.glob("*.zip"):
-        extract_zip(attachment_zfile, attachment_dirpath)
+        extract_zip.extract_zipfile(attachment_zfile, attachment_dirpath)
 
     # 添付ファイルをコピーする
     # TODO:2022-12-16 プロジェクトフォルダの名称は環境変数化したほうがいいかも？
