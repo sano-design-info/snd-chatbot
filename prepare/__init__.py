@@ -1,31 +1,25 @@
 import base64
 import html
 import io
-import itertools
 import os
-import os.path
+import re
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from pprint import pprint
-import re
-import shutil
 
 import copier
 import dateutil.parser
 import dateutil.tz
-import questionary
+import openpyxl
 from bs4 import BeautifulSoup
+from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
-from dateutil.relativedelta import relativedelta
-import openpyxl
-
-from helper import google_api_helper
 
 # load config
 load_dotenv()
