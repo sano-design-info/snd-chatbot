@@ -280,7 +280,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
     # 添付ファイルをコピーする
     # TODO:2022-12-16 プロジェクトフォルダの名称は環境変数化したほうがいいかも？
     project_dir = generated_copier_worker.dst_path / f"ミスミ配管図MA-{msm_katasiki_num}納期 -"
-    shutil.copytree(attachment_dirpath, (project_dir / "資料"))
+    shutil.copytree(attachment_dirpath, (project_dir / "資料"), dirs_exist_ok=True)
 
 
 def add_schedule_spreadsheet(
