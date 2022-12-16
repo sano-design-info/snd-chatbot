@@ -100,31 +100,43 @@ class ExpandedMessageItem:
         )
 
         # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
-        # relative> altanative の手順で掘る。mixedは一番上で考慮しているのでここでは行わない
+        # メールがリッチテキストかつimgファイルがある場合は、multipart/relatedとなり、body_relatedを入れるとimgファイル収集も可能なので、別で用意している
         self.body_related = {}
-        self.body_parts = next(
-            (
-                i
-                for i in self.payload.get("parts")
-                if i.get("mimeType") == "multipart/alternative"
-            ),
-            {},
-        ).get("parts", [])
-        if not self.body_parts:
-            self.body_related = next(
-                (
-                    i
-                    for i in self.payload.get("parts")
-                    if i.get("mimeType") == "multipart/related"
+
+        # ここはtext plane or multipart/altanative or multipart/related >  multipart/altanative の構造になってるらしいので、分離した処理に切り替えないといけない
+        mail_part_mimetype = next(
+            i for i in self.payload.get("parts") if i.get("partId") == "0"
+        ).get("mimeType")
+
+        match mail_part_mimetype:
+            case "text/plain":
+                self.body_parts = self.payload.get("parts")
+            case "multipart/alternative":
+                self.body_parts = next(
+                    (
+                        i
+                        for i in self.payload.get("parts")
+                        if i.get("mimeType") == "multipart/alternative"
+                    ),
+                    {},
+                ).get("parts")
+            case "multipart/related":
+                self.body_related = next(
+                    (
+                        i
+                        for i in self.payload.get("parts")
+                        if i.get("mimeType") == "multipart/related"
+                    )
                 )
-            )
-            self.body_parts = next(
-                (
-                    i
-                    for i in self.body_related.get("parts")
-                    if i.get("mimeType") == "multipart/alternative"
-                )
-            ).get("parts")
+                self.body_parts = next(
+                    (
+                        i
+                        for i in self.body_related.get("parts")
+                        if i.get("mimeType") == "multipart/alternative"
+                    )
+                ).get("parts")
+            case _:
+                pass
 
 
 def generate_mail_printhtml(
