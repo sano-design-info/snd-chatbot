@@ -28,6 +28,7 @@ target_userid = os.environ.get("GMAIL_USER_ID")
 # generate Path
 parent_dirpath = Path(__file__).parents[0]
 export_dirpath = parent_dirpath / "export_files"
+# TODO:2022-12-20 ここでファイルが消せない問題は、管理者権限が必要になるのか確認が必要。gitのindexファイルが消せなくて止まってしまうっぽい。
 # if export_dirpath.exists:
 #     shutil.rmtree(export_dirpath)
 export_dirpath.mkdir(exist_ok=True)
