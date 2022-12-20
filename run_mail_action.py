@@ -2,6 +2,7 @@ import base64
 import itertools
 import os
 from pathlib import Path
+import shutil
 
 import questionary
 from dotenv import load_dotenv
@@ -27,6 +28,8 @@ target_userid = os.environ.get("GMAIL_USER_ID")
 # generate Path
 parent_dirpath = Path(__file__).parents[0]
 export_dirpath = parent_dirpath / "export_files"
+# if export_dirpath.exists:
+#     shutil.rmtree(export_dirpath)
 export_dirpath.mkdir(exist_ok=True)
 
 attachment_files_dirpath = export_dirpath / "attachments"

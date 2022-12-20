@@ -13,6 +13,7 @@ def extract_zipfile(zipfile_path: Path, outdir: Path) -> None:
         print(info.orig_filename.encode(encoding))
 
         # TODO:2022-12-16 chardetライブラリを使って判断してみたけど出来なさそうだったので、最初cp932でデコードして、unicodeerrorになったらutf8にする処理にする
+        # info.filename = info.orig_filename.encode(encoding).decode("cp932")
         try:
             info.filename = info.orig_filename.encode(encoding).decode("cp932")
         except UnicodeDecodeError:
@@ -25,4 +26,4 @@ def extract_zipfile(zipfile_path: Path, outdir: Path) -> None:
             # info.filename = info.orig_filename.encode("cp437").decode("cp932")
             if os.sep != "/" and os.sep in info.filename:
                 info.filename = info.filename.replace(os.sep, "/")
-        zfile.extract(info, outdir)
+            zfile.extract(info, outdir)
