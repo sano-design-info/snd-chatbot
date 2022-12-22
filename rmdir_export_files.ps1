@@ -1,0 +1,1 @@
+Remove-Item .\export_files\ -Force -Recurse
