@@ -18,6 +18,7 @@ from prepare import (
     generate_mail_printhtml,
     generate_pdf_by_renrakukoumoku_excel,
     generate_projectdir,
+    copy_projectdir,
 )
 
 # load config
@@ -211,6 +212,9 @@ def main() -> None:
         generate_projectdir(attachment_files_dirpath, export_dirpath)
     else:
         print("[Not Generate template dirs]")
+
+    print("[copy project dir]")
+    copy_projectdir(export_dirpath)
 
     print("[append schedule]")
     add_schedule_spreadsheet(attachment_files_dirpath, google_creds)
