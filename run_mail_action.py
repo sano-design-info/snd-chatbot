@@ -18,6 +18,7 @@ from prepare import (
     generate_mail_printhtml,
     generate_pdf_by_renrakukoumoku_excel,
     generate_projectdir,
+    copy_projectdir,
 )
 
 # load config
@@ -28,13 +29,8 @@ target_userid = os.environ.get("GMAIL_USER_ID")
 # generate Path
 parent_dirpath = Path(__file__).parents[0]
 export_dirpath = parent_dirpath / "export_files"
-# TODO:2022-12-20 ここでファイルが消せない問題は、管理者権限が必要になるのか確認が必要。gitのindexファイルが消せなくて止まってしまうっぽい。
-# if export_dirpath.exists:
-#     shutil.rmtree(export_dirpath)
-export_dirpath.mkdir(exist_ok=True)
 
 attachment_files_dirpath = export_dirpath / "attachments"
-attachment_files_dirpath.mkdir(exist_ok=True)
 
 # If modifying these scopes, delete the file token.json.
 GOOGLE_API_SCOPES = [
@@ -69,7 +65,13 @@ def save_attachment_file(
         attachmentfiile.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
 
 
+def generate_dirs() -> None:
+    export_dirpath.mkdir(exist_ok=True)
+    attachment_files_dirpath.mkdir(exist_ok=True)
+
+
 def main() -> None:
+
     print("[Start Process...]")
 
     google_creds: Credentials = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
@@ -157,6 +159,9 @@ def main() -> None:
         print("[Cancell Process...]")
         exit()
 
+    print("[Generate Dirs...]")
+    generate_dirs()
+
     print("[Save Attachment file and mail image]")
     # メール本文にimgファイルがある場合はそれを取り出す
     # multipart/relatedの時にあるので、それを狙い撃ちで取る
@@ -207,6 +212,9 @@ def main() -> None:
         generate_projectdir(attachment_files_dirpath, export_dirpath)
     else:
         print("[Not Generate template dirs]")
+
+    print("[copy project dir]")
+    copy_projectdir(export_dirpath)
 
     print("[append schedule]")
     add_schedule_spreadsheet(attachment_files_dirpath, google_creds)

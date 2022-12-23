@@ -29,8 +29,8 @@ estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
 schedule_sheet_id = os.environ.get("SCHEDULE_SHEET_ID")
 msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
 gsheet_tmmp_dir_ids = os.environ.get("GSHEET_TMP_DIR_IDS")
-
 table_search_range = os.environ.get("TABLE_SEARCH_RANGE")
+copy_project_dir_dest_path = Path(os.environ.get("COPY_PROJECT_DIR_DEST_PATH"))
 
 # Path
 parent_dirpath = Path(__file__).parents[1]
@@ -397,3 +397,16 @@ def generate_estimate_calcsheet(
     except HttpError as error:
         # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
         print(f"An error occurred: {error}")
+
+
+def copy_projectdir(export_path: Path) -> None:
+    # プロジェクトフォルダのパスを用意する
+    export_prij_path = next((export_path / "proj_dir").glob("ミスミ配管図*"))
+    print(export_prij_path)
+    print(copy_project_dir_dest_path)
+    shutil.copytree(
+        export_prij_path,
+        copy_project_dir_dest_path / export_prij_path.name,
+        dirs_exist_ok=True,
+    )
+    pass
