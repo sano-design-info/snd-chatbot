@@ -215,7 +215,6 @@ def main() -> None:
     else:
         print("[Not Generate template dirs]")
 
-
     print("[append schedule]")
     add_schedule_spreadsheet(attachment_files_dirpath, google_creds)
 

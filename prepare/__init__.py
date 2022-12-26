@@ -145,18 +145,29 @@ def generate_mail_printhtml(
     messageitem: ExpandedMessageItem, export_dirpath: Path
 ) -> None:
     # メール印刷用HTML生成
-    # TODO:2022-12-14 ここではメールのheader, payloadがあればよさそう。ExpandedMessageItemが引っ張れればよさそうかな
-    messages_text_parts = [
-        i for i in messageitem.body_parts if "text" in i.get("mimeType")
-    ]
 
-    b64dec_msg_byte = decode_base64url(messages_text_parts[1].get("body").get("data"))
+    # TODO:2022-12-27 個々の実装はhtmlかplaneで最初から分けたほうがいいかも
+    messages_text_parts = next(
+        (i for i in messageitem.body_parts if "text/html" in i.get("mimeType")), None
+    )
+    if not messages_text_parts:
+        messages_text_parts = next(
+            (i for i in messageitem.body_parts if "text/plain" in i.get("mimeType"))
+        )
 
     # imgタグを除去する
-    mail_html_bs4 = BeautifulSoup(b64dec_msg_byte, "html.parser")
-    only_body_tags = mail_html_bs4.body
-    for t in only_body_tags.find_all("img"):
-        t.decompose()
+    mail_body = ""
+    b64decoded_mail_body = decode_base64url(messages_text_parts.get("body").get("data"))
+
+    mail_html_bs4 = BeautifulSoup(b64decoded_mail_body, "html.parser")
+
+    if mail_html_bs4.body:
+        mail_body = mail_html_bs4.body
+        for t in mail_body.find_all("img"):
+            t.decompose()
+    else:
+        # decodeしないで、改行タグをhtmlの<br>へ置き換え
+        mail_body = b64decoded_mail_body.decode("utf8").replace("\r\n", "<br>")
 
     # jinja2埋込
     # テンプレート読み込み
@@ -167,7 +178,7 @@ def generate_mail_printhtml(
 
     # 設定ファイル読み込み
     params = {
-        "export_html": only_body_tags,
+        "export_html": mail_body,
         "message_title": html.escape(messageitem.title),
         "message_from_addresss": html.escape(messageitem.from_addresss),
         "message_cc_address": html.escape(messageitem.cc_address),
@@ -178,8 +189,6 @@ def generate_mail_printhtml(
         "w", encoding="utf8"
     ) as exp_mail_hmtl:
         exp_mail_hmtl.write(tmpl.render(params))
-
-    pass
 
 
 def generate_pdf_by_renrakukoumoku_excel(
