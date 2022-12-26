@@ -216,6 +216,7 @@ def main() -> None:
     print("[copy project dir]")
     copy_projectdir(export_dirpath)
 
+    # TODO:2022-12-23 この部分をオフにする質問を追加する
     print("[append schedule]")
     add_schedule_spreadsheet(attachment_files_dirpath, google_creds)
 

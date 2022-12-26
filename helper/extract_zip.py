@@ -3,6 +3,7 @@ import zipfile
 from pathlib import Path
 
 
+# TODO:2022-12-23 zipファイル解凍が失敗したらエラーとして解凍しないで進める
 def extract_zipfile(zipfile_path: Path, outdir: Path) -> None:
     def _rename(info: zipfile.ZipInfo) -> None:
         """ヘルパー: `ZipInfo` のファイル名を SJIS でデコードし直す"""

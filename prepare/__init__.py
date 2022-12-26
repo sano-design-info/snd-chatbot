@@ -275,6 +275,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
     # 添付ファイルを解凍する
     for attachment_zfile in attachment_dirpath.glob("*.zip"):
+        print(attachment_zfile)
         extract_zip.extract_zipfile(attachment_zfile, attachment_dirpath)
 
     # 添付ファイルをコピーする
