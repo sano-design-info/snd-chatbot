@@ -220,6 +220,8 @@ def main() -> None:
     if ask_generate_projectfile:
         print("[Generate template dirs]")
         generate_projectdir(attachment_files_dirpath, export_dirpath)
+        print("[copy project dir]")
+        copy_projectdir(export_dirpath)
     else:
         print("[Not Generate template dirs]")
 
