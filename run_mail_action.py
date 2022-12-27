@@ -225,9 +225,6 @@ def main() -> None:
     else:
         print("[Not Generate template dirs]")
 
-    print("[copy project dir]")
-    copy_projectdir(export_dirpath)
-
     # TODO:2022-12-23 この部分をオフにする質問を追加する
     if ask_add_schedule_and_generate_estimate_calcsheet:
         print("[append schedule]")
