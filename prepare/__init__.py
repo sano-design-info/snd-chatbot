@@ -284,6 +284,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
     # 添付ファイルを解凍する
     for attachment_zfile in attachment_dirpath.glob("*.zip"):
+        print(attachment_zfile)
         extract_zip.extract_zipfile(attachment_zfile, attachment_dirpath)
 
     # 添付ファイルをコピーする
@@ -293,7 +294,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
 
 def add_schedule_spreadsheet(
-    attachment_dirpath: Path, google_creds: Credentials
+    attachment_dirpath: Path, google_creds: Credentials, nyukin_nextmonth: bool = False
 ) -> None:
     target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
     if not target_filepath:
@@ -319,8 +320,13 @@ def add_schedule_spreadsheet(
     # 開始日: 実行日でよし
     now_datetime = datetime.now()
     add_schedule_start_datetime = now_datetime.strftime("%Y/%m/%d")
-    # 振込タイミング:開始日の来月を基本にする。ずれる場合は手動で修正する
-    add_schedule_hurikomiduki = now_datetime.replace(day=1) + relativedelta(months=1)
+    # 振込タイミング
+    nyukin_month = 1
+    if nyukin_nextmonth:
+        nyukin_month = 2
+    add_schedule_hurikomiduki = now_datetime.replace(day=1) + relativedelta(
+        months=nyukin_month
+    )
 
     append_values = [
         [
