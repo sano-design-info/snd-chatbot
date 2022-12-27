@@ -159,7 +159,7 @@ def main() -> None:
 
     if ask_add_schedule_and_generate_estimate_calcsheet:
         ask_add_schedule_nextmonth = questionary.confirm(
-            "スケジュール表追加時に入金日を来月にしますか？", True
+            "スケジュール表追加時に入金日を予定月の来月にしますか？", False
         ).ask()
 
     # 選択後、処理開始していいか問い合わせして実行
