@@ -154,13 +154,17 @@ def main() -> None:
     ).ask()
 
     ask_add_schedule_and_generate_estimate_calcsheet = questionary.confirm(
-        "スケジュール表追加と見積計算表の作成を行いますか？", True
+        "スケジュール表追加と見積計算表の作成を行いますか？（プロジェクトファイル再作成時の対応に利用します）", True
     ).ask()
 
-    if ask_add_schedule_and_generate_estimate_calcsheet:
-        ask_add_schedule_nextmonth = questionary.confirm(
-            "スケジュール表追加時に入金日を予定月の来月にしますか？", False
-        ).ask()
+    # スキップする場合、↑の質問がFalseになる場合
+    ask_add_schedule_nextmonth = (
+        questionary.confirm("スケジュール表追加時に入金日を予定月の来月にしますか？", False)
+        .skip_if(
+            ask_add_schedule_and_generate_estimate_calcsheet == False, default=False
+        )
+        .ask()
+    )
 
     # 選択後、処理開始していいか問い合わせして実行
     comefirm_check = questionary.confirm("run Process?", False).ask()
