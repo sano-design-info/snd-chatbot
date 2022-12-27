@@ -20,11 +20,13 @@ def extract_zipfile(zipfile_path: Path, outdir: Path) -> None:
         except UnicodeDecodeError:
             info.filename = info.orig_filename.encode(encoding).decode("utf-8")
 
-    with zipfile.ZipFile(zipfile_path) as zfile:
-        for info in zfile.infolist():
-            # cop932で固定するとまずいので、
-            _rename(info)
-            # info.filename = info.orig_filename.encode("cp437").decode("cp932")
-            if os.sep != "/" and os.sep in info.filename:
-                info.filename = info.filename.replace(os.sep, "/")
-            zfile.extract(info, outdir)
+    try:
+        with zipfile.ZipFile(zipfile_path) as zfile:
+            for info in zfile.infolist():
+                _rename(info)
+                # info.filename = info.orig_filename.encode("cp437").decode("cp932")
+                if os.sep != "/" and os.sep in info.filename:
+                    info.filename = info.filename.replace(os.sep, "/")
+                    zfile.extract(info, outdir)
+    except zipfile.BadZipFile:
+        print(f"Zipファイルの解凍に失敗しました。不正なZipファイルの可能性があります :{zipfile_path}")
