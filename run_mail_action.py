@@ -145,12 +145,22 @@ def main() -> None:
     print("[Select Mail...]")
 
     selected_message: ExpandedMessageItem = questionary.select(
-        "select msm gas mail message", choices=message_item_and_labels
+        "メールの選択をしてください", choices=message_item_and_labels
     ).ask()
 
+    # その他質問を確認
     ask_generate_projectfile = questionary.confirm(
-        "generate projectfile?(not initial anken eg: MA-0000-1)", True
+        "プロジェクトファイルを生成しますか？(修正案件の場合は作成しないこと 例: MA-0000-1)", True
     ).ask()
+
+    ask_add_schedule_and_generate_estimate_calcsheet = questionary.confirm(
+        "スケジュール表追加と見積計算表の作成を行いますか？", True
+    ).ask()
+
+    if ask_add_schedule_and_generate_estimate_calcsheet:
+        ask_add_schedule_nextmonth = questionary.confirm(
+            "スケジュール表追加時に入金日を来月にしますか？", True
+        ).ask()
 
     # 選択後、処理開始していいか問い合わせして実行
     comefirm_check = questionary.confirm("run Process?", False).ask()
@@ -217,11 +227,16 @@ def main() -> None:
     copy_projectdir(export_dirpath)
 
     # TODO:2022-12-23 この部分をオフにする質問を追加する
-    print("[append schedule]")
-    add_schedule_spreadsheet(attachment_files_dirpath, google_creds)
+    if ask_add_schedule_and_generate_estimate_calcsheet:
+        print("[append schedule]")
+        add_schedule_spreadsheet(
+            attachment_files_dirpath, google_creds, ask_add_schedule_nextmonth
+        )
 
-    print("[add estimate calcsheet]")
-    generate_estimate_calcsheet(attachment_files_dirpath, google_creds)
+        print("[add estimate calcsheet]")
+        generate_estimate_calcsheet(attachment_files_dirpath, google_creds)
+    else:
+        print("[Not Add Scuedule, Generate estimate calcsheet]")
 
     print("[End Process...]")
     exit()
