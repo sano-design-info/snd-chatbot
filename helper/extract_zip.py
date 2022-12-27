@@ -10,11 +10,9 @@ def extract_zipfile(zipfile_path: Path, outdir: Path) -> None:
         LANG_ENC_FLAG = 0x800
         encoding = "utf-8" if info.flag_bits & LANG_ENC_FLAG else "cp437"
 
-        # cp932でdecodeすると、それ以外のエンコーディングで失敗するので、エンコーディング判断が必要
         print(info.orig_filename.encode(encoding))
 
-        # TODO:2022-12-16 chardetライブラリを使って判断してみたけど出来なさそうだったので、最初cp932でデコードして、unicodeerrorになったらutf8にする処理にする
-        # info.filename = info.orig_filename.encode(encoding).decode("cp932")
+        # 最初cp932でデコードして、unicodeerrorになったらutf8にする処理にする
         try:
             info.filename = info.orig_filename.encode(encoding).decode("cp932")
         except UnicodeDecodeError:
