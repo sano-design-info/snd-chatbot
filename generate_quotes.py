@@ -20,6 +20,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
+from helper import google_api_helper, api_scopes
 
 # load config, credential
 dotenv.load_dotenv()
@@ -40,13 +41,15 @@ MITSUMORI_DIR_IDS = config.get("googledrive").get("MITSUMORI_DIR_IDS")
 
 MISTUMORI_NUMBER_PATTERN = re.compile("^.*_MA-(?P<number>.*)")
 
-GOOGLE_API_SCOPES = [
-    "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/drive.appdata",
-    "https://www.googleapis.com/auth/drive.scripts",
-    "https://www.googleapis.com/auth/drive.metadata",
-]
+# GOOGLE_API_SCOPES = [
+#     "https://www.googleapis.com/auth/drive",
+#     "https://www.googleapis.com/auth/drive.file",
+#     "https://www.googleapis.com/auth/drive.appdata",
+#     "https://www.googleapis.com/auth/drive.scripts",
+#     "https://www.googleapis.com/auth/drive.metadata",
+# ]
+
+GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
 
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
