@@ -57,32 +57,6 @@ MITSUMORI_RANGES = config["mapping"]
 MOVE_DIR_ID = config.get("googledrive").get("MOVE_DIR_ID")
 
 
-# TODO:2022-04-05 クラスでラッピング
-def get_goolge_oauth_cledential() -> Credentials:
-    """Shows basic usage of the Drive v3 API.
-    Prints the names and ids of the first 10 files the user has access to.
-    """
-    creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", GOOGLE_API_SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                GOOGLE_CREDENTIAL, GOOGLE_API_SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open("token.json", "w") as token:
-            token.write(creds.to_json())
-    return creds
-
-
 def print_quote_info(**kargs):
     """
     生成した見積情報をワンラインで表示する
@@ -192,7 +166,7 @@ def generate_quote_json_data(**kargs) -> dict:
 def main(dry_run):
 
     # Googleのtokenを用意
-    google_credential = get_goolge_oauth_cledential()
+    google_credential = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
     gdrive_serivice = build("drive", "v3", credentials=google_credential)
     gsheet_service = build("sheets", "v4", credentials=google_credential)
 
