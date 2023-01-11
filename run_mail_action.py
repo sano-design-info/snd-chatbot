@@ -10,7 +10,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from helper import google_api_helper
+from helper import google_api_helper, api_scopes
 from prepare import (
     ExpandedMessageItem,
     add_schedule_spreadsheet,
@@ -20,6 +20,7 @@ from prepare import (
     generate_projectdir,
     copy_projectdir,
 )
+
 
 # load config
 load_dotenv()
@@ -33,16 +34,17 @@ export_dirpath = parent_dirpath / "export_files"
 attachment_files_dirpath = export_dirpath / "attachments"
 
 # If modifying these scopes, delete the file token.json.
-GOOGLE_API_SCOPES = [
-    "https://mail.google.com/",
-    "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    # "https://www.googleapis.com/auth/gmail.metadata",
-    "https://www.googleapis.com/auth/drive.metadata.readonly",
-    "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/drive.appdata",
-]
+# GOOGLE_API_SCOPES = [
+#     "https://mail.google.com/",
+#     "https://www.googleapis.com/auth/gmail.modify",
+#     "https://www.googleapis.com/auth/gmail.readonly",
+#     # "https://www.googleapis.com/auth/gmail.metadata",
+#     "https://www.googleapis.com/auth/drive.metadata.readonly",
+#     "https://www.googleapis.com/auth/drive",
+#     "https://www.googleapis.com/auth/drive.file",
+#     "https://www.googleapis.com/auth/drive.appdata",
+# ]
+GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
 
 
 def save_attachment_file(
