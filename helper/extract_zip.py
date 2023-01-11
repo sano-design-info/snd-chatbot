@@ -30,7 +30,7 @@ def extract_zipfile(zipfile_path: Path, outdir: Path) -> None:
                 if os.sep != "/" and os.sep in info.filename:
                     info.filename = info.filename.replace(os.sep, "/")
 
-                # 解凍する
+                # ファイル単位で解凍する
                 zfile.extract(info, outdir)
     except zipfile.BadZipFile:
         print(f"Zipファイルの解凍に失敗しました。不正なZipファイルの可能性があります :{zipfile_path}")
