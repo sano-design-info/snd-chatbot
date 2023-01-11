@@ -1,0 +1,342 @@
+# coding: utf-8
+import json
+import os
+import os.path
+import sys
+from datetime import datetime
+from pathlib import Path
+from pprint import pprint
+
+import re
+
+import click
+
+import dotenv
+import toml
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+from mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
+
+# load config, credential
+dotenv.load_dotenv()
+
+# Credentials you get from registering a new application
+# CLIENT_ID = os.getenv("MFCLOUD_CLIENT_ID")
+# CLIENT_SECRET = os.getenv("MFCLOUD_CLIENT_SECRET")
+GOOGLE_CREDENTIAL = os.environ.get("CRED_FILEPATH")
+
+# 2020-01-01 のフォーマットのみ受け付ける
+START_DATE_FORMAT = "%Y-%m-%d"
+
+CONFIG_FILE = Path("mfi_estimate_generator.toml")
+config = toml.load(CONFIG_FILE)
+
+MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
+MITSUMORI_DIR_IDS = config.get("googledrive").get("MITSUMORI_DIR_IDS")
+
+MISTUMORI_NUMBER_PATTERN = re.compile("^.*_MA-(?P<number>.*)")
+
+GOOGLE_API_SCOPES = [
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive.appdata",
+    "https://www.googleapis.com/auth/drive.scripts",
+    "https://www.googleapis.com/auth/drive.metadata",
+]
+
+API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
+
+MITSUMORI_RANGES = config["mapping"]
+MOVE_DIR_ID = config.get("googledrive").get("MOVE_DIR_ID")
+
+
+# TODO:2022-04-05 クラスでラッピング
+def get_goolge_oauth_cledential() -> Credentials:
+    """Shows basic usage of the Drive v3 API.
+    Prints the names and ids of the first 10 files the user has access to.
+    """
+    creds = None
+    # The file token.json stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", GOOGLE_API_SCOPES)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                GOOGLE_CREDENTIAL, GOOGLE_API_SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+    return creds
+
+
+def print_quote_info(**kargs):
+    """
+    生成した見積情報をワンラインで表示する
+    """
+
+    print(
+        f'見積情報: 型式:MA-{kargs["part_number"]} 日時:{kargs["duration"]} 価格:{kargs["price"]}'
+    )
+
+
+def fix_datetime(datetime_str: str) -> datetime:
+    """
+    日付の入力の区切り文字を修正する。
+    """
+    for splitecahr in (".", "/"):
+        if splitecahr in datetime_str:
+            return datetime.strptime(datetime_str, splitecahr.join(("%Y", "%m", "%d")))
+
+
+def seikika_data(estimate_data: dict) -> dict:
+
+    # 入る値は全てイミュータブルなのでcopyでヨシにした
+    result_data = estimate_data.copy()
+
+    # 日付文字列をdatetime化する、日付が未定の場合（入ってないや文字列の場合）はそのままスルーする
+    if isinstance(fix_datetime(estimate_data["duration"]), datetime):
+        duration_str = f"納期 {fix_datetime(estimate_data['duration']): %m/%d}"
+    else:
+        duration_str = f"納期 {estimate_data['duration']}"
+    result_data["duration"] = duration_str
+
+    result_data["price"] = int(re.sub(r"[\¥\,]", "", estimate_data["price"]))
+    result_data["discount_flag"] = int(re.sub(r"[\¥\,]", "", estimate_data["price"]))
+
+    return result_data
+
+
+def generate_quote_json_data(**kargs) -> dict:
+    """
+    見積情報を元に、MFクラウド請求書APIで使う見積書作成のjsonを生成する
+    """
+
+    today_datetime = datetime.now().strftime(START_DATE_FORMAT)
+    quote_json_template = """
+    {
+        "quote": {
+            "department_id": "",
+            "quote_date": "2020-05-08",
+            "title": "string_Testtitle",
+            "note": "",
+            "memo": "",
+            "tags": "佐野設計自動生成",
+            "items": [
+                {
+                    "name": "品目",
+                    "detail": "詳細",
+                    "unit_price": 0,
+                    "unit": "",
+                    "quantity": 0,
+                    "excise": true
+                }
+            ]
+        }
+    }
+    """
+
+    # jsonでロードする
+    quote_data = json.loads(quote_json_template)
+
+    # department_idはミスミのものを利用
+    quote_data["quote"]["department_id"] = MISUMI_TORIHIKISAKI_ID
+
+    # 各情報を入れる
+
+    # 結果をjsonで返す
+
+    quote_data["quote"]["title"] = "ガススプリング配管図作製費"
+
+    quote_data["quote"]["quote_date"] = today_datetime
+    quote_data["quote"]["items"][0]["name"] = "MA-{} ガススプリング配管図".format(
+        kargs["part_number"]
+    )
+    quote_data["quote"]["items"][0]["quantity"] = 1
+    quote_data["quote"]["items"][0]["detail"] = kargs["duration"]
+    quote_data["quote"]["items"][0]["unit_price"] = kargs["price"]
+
+    # LRは条件判断を行う
+    rh_flag = kargs["part_number"].split("-")[-1]
+
+    # TODO:2022-11-14 discount_flagはもう利用していないので、2022-11-14現在で最新の計算表v2で問題がなくなったらand条件を外す
+    if rh_flag in ("RH", "LH") and int(kargs["discount_flag"]) != 0:
+
+        # RHの場合はLH, LHの場合はRHの備考文章を作成
+        reverse_part_number = "MA-" + "-".join(kargs["part_number"].split("-")[0:-1])
+
+        if rh_flag == "RH":
+            reverse_part_number = reverse_part_number + "-LH"
+        else:
+            reverse_part_number = reverse_part_number + "-RH"
+
+        quote_data["quote"]["note"] = "本見積は{}の対象側作図案件となります".format(reverse_part_number)
+    return quote_data
+
+
+@click.command()
+@click.option("--dry-run", is_flag=True, help="Dry Run Flag")
+def main(dry_run):
+
+    # Googleのtokenを用意
+    google_credential = get_goolge_oauth_cledential()
+    gdrive_serivice = build("drive", "v3", credentials=google_credential)
+    gsheet_service = build("sheets", "v4", credentials=google_credential)
+
+    # mfcloudのセッション作成
+    mfci_cred = MFCICledential()
+    mfcloud_invoice_session = mfci_cred.get_session()
+    # print(mfcloud_invoice_session)
+    # exit()
+
+    # google sheetのリストを取得
+    googledrive_search_target_mimetype = "application/vnd.google-apps.spreadsheet"
+    # - 特定のフォルダ（GSheet的にはグループ）の一覧を取得
+
+    # テンプレフォルダ内もフィルターにいれる。その時にテンプレートは除外する
+    dir_ids_query = " or ".join((f"'{id}' in parents " for id in MITSUMORI_DIR_IDS))
+    try:
+        contain_mitumori_folder_query = f"""
+        ({dir_ids_query})
+        and mimeType = '{googledrive_search_target_mimetype}'
+        and trashed = false
+        and name != "ミスミ配管図見積り計算表v2_MA-[ミスミ型番]"
+        """
+
+        mitumori_sheet_list = (
+            gdrive_serivice.files()
+            .list(
+                q=contain_mitumori_folder_query,
+                pageSize=10,
+                fields="nextPageToken, files(id, name, parents)",
+            )
+            .execute()
+        )
+        # pprint(mitumori_sheet_list)
+        # 取得結果を反転させる。順番を作成順にしたほうがわかりやすい
+        target_items = list(reversed(mitumori_sheet_list.get("files", [])))
+
+    except HttpError as error:
+        sys.exit(f"Google Drive APIのエラーが発生しました。: {error}")
+
+    # - 一覧から該当する見積もり計算表を取得
+    print("見積もりを作るスプレッドシートの番号を入力を入れてください。")
+
+    for index, mitsumori_gsheet in enumerate(target_items, 1):
+        print(f"{index:0>2}: 見積名:{mitsumori_gsheet.get('name')}")
+
+    selected_item = input("\n番号を選択してください: ")
+
+    # キャンセル処理を入れる
+    if not selected_item:
+        print("操作をキャンセルしました。終了します。")
+        sys.exit(0)
+    selected_index = int(selected_item) - 1
+
+    print(
+        f"こちらのシートが選択されています!: {selected_item}:{target_items[selected_index].get('name')}"
+    )
+
+    # 見積のデータを生成
+    estimate_data = {}
+    target_item = target_items[selected_index]
+
+    # シートのファイル名から品番生成
+    estimate_data["part_number"] = MISTUMORI_NUMBER_PATTERN.match(
+        target_item.get("name")
+    ).group("number")
+
+    # GSheetから値取得
+    try:
+        # Call the Sheets API
+        sheet = gsheet_service.spreadsheets()
+        gsheet_result = (
+            sheet.values()
+            .batchGet(
+                spreadsheetId=target_item.get("id"),
+                ranges=list(MITSUMORI_RANGES.values()),
+            )
+            .execute()
+        )
+        gsheet_values = gsheet_result.get("valueRanges", [])
+
+        # print(gsheet_values)
+
+        if not gsheet_values:
+            print("No data found.")
+            return
+
+        for key, value in zip(MITSUMORI_RANGES.keys(), gsheet_values):
+            estimate_data[key] = value.get("values")[0][0]
+        # print(estimate_data)
+
+    except HttpError as error:
+        sys.exit(f"Google Sheet APIでエラーが発生しました。: {error}")
+
+    # 型変換する
+    estimate_data = seikika_data(estimate_data)
+
+    # 収集した見積情報を元にMFクラウドへ渡すjsonデータを生成
+    quote_data = generate_quote_json_data(**estimate_data)
+
+    # サマリーを表示する
+    print_quote_info(**estimate_data)
+
+    # dry-runはここまで。dry-runは結果をjsonで返す。
+    if dry_run:
+        print("[dry run]json dump:")
+        pprint(quote_data)
+        sys.exit(0)
+
+    generated_quote_result = generate_quote(mfcloud_invoice_session, quote_data)
+
+    # errorなら終了する
+    if "errors" in generated_quote_result:
+        print("エラーが発生しました。詳細はレスポンスを確認ください")
+        pprint(generated_quote_result)
+        sys.exit(0)
+
+    # PDFのファイル名はミスミの型式で行う
+    filename_partname = estimate_data["part_number"]
+    save_filepath = Path("./quote") / f"見積書_MA-{filename_partname}.pdf"
+
+    download_quote_pdf(
+        mfcloud_invoice_session,
+        generated_quote_result["data"]["attributes"]["pdf_url"],
+        save_filepath,
+    )
+
+    # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
+    try:
+        previous_parents = ",".join(target_item.get("parents"))
+
+        # print(
+        #     f"move file {target_item['name']} : oldid:{previous_parents} to newid:{MOVE_DIR_ID}"
+        # )
+        _ = (
+            gdrive_serivice.files()
+            .update(
+                fileId=target_item["id"],
+                addParents=MOVE_DIR_ID,
+                removeParents=previous_parents,
+                fields="id, parents",
+            )
+            .execute()
+        )
+
+    except HttpError as error:
+        sys.exit(f"スプレッドシート移動時にエラーが発生しました: {error}")
+
+
+if __name__ == "__main__":
+    main()
