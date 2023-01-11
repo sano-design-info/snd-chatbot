@@ -158,3 +158,8 @@ exam
 export_files
 .DS_Store
 mfi_estimate_generator.toml
+.vscode
+access_token.dat
+quote/
+billing/
+debug.log
