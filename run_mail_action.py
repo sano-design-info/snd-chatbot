@@ -25,7 +25,7 @@ from prepare import (
 # load config
 load_dotenv()
 
-target_userid = os.environ.get("GMAIL_USER_ID")
+target_userid = os.environ["GMAIL_USER_ID"]
 
 # generate Path
 parent_dirpath = Path(__file__).parents[0]
@@ -76,12 +76,12 @@ def main() -> None:
 
     print("[Start Process...]")
 
-    google_creds: Credentials = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
+    google_cred: Credentials = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
 
     messages: list[ExpandedMessageItem] = []
     try:
         # Call the Gmail API
-        service = build("gmail", "v1", credentials=google_creds)
+        service = build("gmail", "v1", credentials=google_cred)
 
         # スレッド検索
         thread_results = (
@@ -220,7 +220,7 @@ def main() -> None:
 
     print("[Generate Excel Printable PDF]")
     generate_pdf_by_renrakukoumoku_excel(
-        attachment_files_dirpath, export_dirpath, google_creds
+        attachment_files_dirpath, export_dirpath, google_cred
     )
 
     if ask_generate_projectfile:
@@ -235,11 +235,11 @@ def main() -> None:
     if ask_add_schedule_and_generate_estimate_calcsheet:
         print("[append schedule]")
         add_schedule_spreadsheet(
-            attachment_files_dirpath, google_creds, ask_add_schedule_nextmonth
+            attachment_files_dirpath, google_cred, ask_add_schedule_nextmonth
         )
 
         print("[add estimate calcsheet]")
-        generate_estimate_calcsheet(attachment_files_dirpath, google_creds)
+        generate_estimate_calcsheet(attachment_files_dirpath, google_cred)
     else:
         print("[Not Add Scuedule, Generate estimate calcsheet]")
 

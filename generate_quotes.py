@@ -21,6 +21,14 @@ from googleapiclient.errors import HttpError
 
 from helper.mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
 from helper import google_api_helper, api_scopes
+from post_process import (
+    EstimateCalcSheetInfo,
+    MsmAnkenMap,
+    MsmAnkenMapList,
+    generate_update_valueranges,
+    get_schedule_table_area,
+    update_schedule_sheet,
+)
 
 # load config, credential
 dotenv.load_dotenv()
@@ -55,6 +63,9 @@ API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
 MITSUMORI_RANGES = config["mapping"]
 MOVE_DIR_ID = config.get("googledrive").get("MOVE_DIR_ID")
+
+
+table_search_range = os.environ["TABLE_SEARCH_RANGE"]
 
 
 def print_quote_info(**kargs):
@@ -166,9 +177,9 @@ def generate_quote_json_data(**kargs) -> dict:
 def main(dry_run):
 
     # Googleのtokenを用意
-    google_credential = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
-    gdrive_serivice = build("drive", "v3", credentials=google_credential)
-    gsheet_service = build("sheets", "v4", credentials=google_credential)
+    google_cred = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
+    gdrive_serivice = build("drive", "v3", credentials=google_cred)
+    gsheet_service = build("sheets", "v4", credentials=google_cred)
 
     # mfcloudのセッション作成
     mfci_cred = MFCICledential()
@@ -313,6 +324,23 @@ def main(dry_run):
 
     except HttpError as error:
         sys.exit(f"スプレッドシート移動時にエラーが発生しました: {error}")
+
+    # スケジュール表の該当行に価格を追加する
+    target_sheet_id = target_item.get("id")
+
+    # 扱う行は一つなので登録も一つのみ
+    estimate_calcsheet_info = EstimateCalcSheetInfo(target_sheet_id)
+    msmanken_info = MsmAnkenMap(estimate_calcsheet_info=estimate_calcsheet_info)
+    msmankenmaplist = MsmAnkenMapList()
+    msmankenmaplist.msmankenmap_list.append(msmanken_info)
+
+    export_pd = msmankenmaplist.generate_update_sheet_values()
+    before_pd = get_schedule_table_area(table_search_range, google_cred)
+
+    update_data = generate_update_valueranges(table_search_range, before_pd, export_pd)
+    print(update_data)
+
+    update_schedule_sheet(update_data, google_cred)
 
 
 if __name__ == "__main__":

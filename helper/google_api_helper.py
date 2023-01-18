@@ -11,7 +11,7 @@ load_dotenv()
 
 # generate Path
 parent_dirpath = Path(__file__).parents[1]
-cred_filepath = os.environ.get("CRED_FILEPATH")
+cred_filepath = os.environ["CRED_FILEPATH"]
 token_save_path = parent_dirpath / "token.json"
 cred_json = parent_dirpath / cred_filepath
 
