@@ -25,12 +25,12 @@ from helper import extract_zip
 
 # load config
 load_dotenv()
-estimate_template_gsheet_id = os.environ.get("ESTIMATE_TEMPLATE_GSHEET_ID")
-schedule_sheet_id = os.environ.get("SCHEDULE_SHEET_ID")
-msm_gas_boilerplate_url = os.environ.get("MSM_GAS_BOILERPLATE_URL")
-gsheet_tmmp_dir_ids = os.environ.get("GSHEET_TMP_DIR_IDS")
-table_search_range = os.environ.get("TABLE_SEARCH_RANGE")
-copy_project_dir_dest_path = Path(os.environ.get("COPY_PROJECT_DIR_DEST_PATH"))
+estimate_template_gsheet_id = os.environ["ESTIMATE_TEMPLATE_GSHEET_ID"]
+schedule_sheet_id = os.environ["SCHEDULE_SHEET_ID"]
+msm_gas_boilerplate_url = os.environ["MSM_GAS_BOILERPLATE_URL"]
+gsheet_tmmp_dir_ids = os.environ["GSHEET_TMP_DIR_IDS"]
+table_search_range = os.environ["TABLE_SEARCH_RANGE"]
+copy_project_dir_dest_path = Path(os.environ["COPY_PROJECT_DIR_DEST_PATH"])
 
 # Path
 parent_dirpath = Path(__file__).parents[1]
@@ -194,7 +194,7 @@ def generate_mail_printhtml(
 def generate_pdf_by_renrakukoumoku_excel(
     attachment_dirpath: Path,
     export_dirpath: Path,
-    google_creds: Credentials,
+    google_cred: Credentials,
 ) -> None:
     # 連絡項目の印刷用PDFファイル生成
     mimetype_xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -218,7 +218,7 @@ def generate_pdf_by_renrakukoumoku_excel(
     }
 
     try:
-        drive_service = build("drive", "v3", credentials=google_creds)
+        drive_service = build("drive", "v3", credentials=google_cred)
 
         # Excelファイルのアップロードを行って、そのアップロードファイルをPDFで保存できるかチェック
         upload_results = (
@@ -294,7 +294,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
 
 def add_schedule_spreadsheet(
-    attachment_dirpath: Path, google_creds: Credentials, nyukin_nextmonth: bool = False
+    attachment_dirpath: Path, google_cred: Credentials, nyukin_nextmonth: bool = False
 ) -> None:
     target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
     if not target_filepath:
@@ -346,7 +346,7 @@ def add_schedule_spreadsheet(
         ]
     ]
 
-    sheet_service = build("sheets", "v4", credentials=google_creds)
+    sheet_service = build("sheets", "v4", credentials=google_cred)
 
     # print(schedule_sheet_id, " ", table_search_range, "", )
     # print(append_values)
@@ -368,7 +368,7 @@ def add_schedule_spreadsheet(
 
 
 def generate_estimate_calcsheet(
-    attachment_dirpath: Path, google_creds: Credentials
+    attachment_dirpath: Path, google_cred: Credentials
 ) -> None:
 
     # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
@@ -382,7 +382,7 @@ def generate_estimate_calcsheet(
     msm_katasiki_num = pick_msm_katasiki_by_renrakukoumoku_filename(target_filepath)
 
     try:
-        drive_service = build("drive", "v3", credentials=google_creds)
+        drive_service = build("drive", "v3", credentials=google_cred)
 
         copy_template_results = (
             drive_service.files()
