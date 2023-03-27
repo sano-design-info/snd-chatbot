@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime
 import itertools
 import os
 from pathlib import Path
@@ -29,7 +30,11 @@ target_userid = os.environ["GMAIL_USER_ID"]
 
 # generate Path
 parent_dirpath = Path(__file__).parents[0]
-export_dirpath = parent_dirpath / "export_files"
+export_dirpath = (
+    parent_dirpath
+    / "export_files"
+    / f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+)
 
 attachment_files_dirpath = export_dirpath / "attachments"
 
@@ -68,7 +73,7 @@ def save_attachment_file(
 
 
 def generate_dirs() -> None:
-    export_dirpath.mkdir(exist_ok=True)
+    export_dirpath.mkdir(exist_ok=True, parents=True)
     attachment_files_dirpath.mkdir(exist_ok=True)
 
 
