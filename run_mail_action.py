@@ -25,7 +25,6 @@ from prepare import (
 
 # load config
 load_dotenv()
-
 target_userid = os.environ["GMAIL_USER_ID"]
 
 # generate Path
@@ -35,20 +34,8 @@ export_dirpath = (
     / "export_files"
     / f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 )
-
 attachment_dirpath = export_dirpath / "attachments"
 
-# If modifying these scopes, delete the file token.json.
-# GOOGLE_API_SCOPES = [
-#     "https://mail.google.com/",
-#     "https://www.googleapis.com/auth/gmail.modify",
-#     "https://www.googleapis.com/auth/gmail.readonly",
-#     # "https://www.googleapis.com/auth/gmail.metadata",
-#     "https://www.googleapis.com/auth/drive.metadata.readonly",
-#     "https://www.googleapis.com/auth/drive",
-#     "https://www.googleapis.com/auth/drive.file",
-#     "https://www.googleapis.com/auth/drive.appdata",
-# ]
 GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
 
 
@@ -66,7 +53,6 @@ def save_attachment_file(
         )
         .execute()
     )
-    # print(attachfile_data)
     print((attachment_dirpath / Path(filename)))
     with (attachment_dirpath / Path(filename)).open("wb") as attachmentfiile:
         attachmentfiile.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
@@ -96,8 +82,6 @@ def main() -> None:
             .execute()
         )
         threads = thread_results.get("threads", [])
-
-        # pprint(threads)
 
         # 上位10件のスレッド -> メッセージを取得。
         # スレッドに紐づきが2件ぐらいのメッセージの部分でのもので十分かな
@@ -148,7 +132,6 @@ def main() -> None:
         )
 
     # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
-
     print("[Select Mail...]")
 
     selected_message: ExpandedMessageItem = questionary.select(
@@ -193,9 +176,7 @@ def main() -> None:
             for i in selected_message.body_related.get("parts")
             if "image" in i.get("mimeType")
         ]
-        # print(message_imgs)
         for msg_img in message_imgs:
-            # print(msg_img.get("filename"))
             save_attachment_file(
                 service,
                 msg_img.get("filename"),
@@ -208,7 +189,6 @@ def main() -> None:
         for i in selected_message.payload.get("parts")
         if "application" in i.get("mimeType")
     ]
-    # print(message_attachmentfiles)
 
     for msg_attach in message_attachmentfiles:
         save_attachment_file(

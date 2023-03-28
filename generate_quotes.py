@@ -32,10 +32,6 @@ from post_process import (
 
 # load config, credential
 dotenv.load_dotenv()
-
-# Credentials you get from registering a new application
-# CLIENT_ID = os.getenv("MFCLOUD_CLIENT_ID")
-# CLIENT_SECRET = os.getenv("MFCLOUD_CLIENT_SECRET")
 GOOGLE_CREDENTIAL = os.environ.get("CRED_FILEPATH")
 
 # 2020-01-01 のフォーマットのみ受け付ける
@@ -49,16 +45,9 @@ MITSUMORI_DIR_IDS = config.get("googledrive").get("MITSUMORI_DIR_IDS")
 
 MISTUMORI_NUMBER_PATTERN = re.compile("^.*_MA-(?P<number>.*)")
 
-# GOOGLE_API_SCOPES = [
-#     "https://www.googleapis.com/auth/drive",
-#     "https://www.googleapis.com/auth/drive.file",
-#     "https://www.googleapis.com/auth/drive.appdata",
-#     "https://www.googleapis.com/auth/drive.scripts",
-#     "https://www.googleapis.com/auth/drive.metadata",
-# ]
-
 GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
 
+# TODO:2023-03-28 これはもう使わないはずなので削除する。issue作ること
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
 MITSUMORI_RANGES = config["mapping"]
@@ -184,8 +173,6 @@ def main(dry_run):
     # mfcloudのセッション作成
     mfci_cred = MFCICledential()
     mfcloud_invoice_session = mfci_cred.get_session()
-    # print(mfcloud_invoice_session)
-    # exit()
 
     # google sheetのリストを取得
     googledrive_search_target_mimetype = "application/vnd.google-apps.spreadsheet"
@@ -210,7 +197,6 @@ def main(dry_run):
             )
             .execute()
         )
-        # pprint(mitumori_sheet_list)
         # 取得結果を反転させる。順番を作成順にしたほうがわかりやすい
         target_items = list(reversed(mitumori_sheet_list.get("files", [])))
 
@@ -257,8 +243,6 @@ def main(dry_run):
             .execute()
         )
         gsheet_values = gsheet_result.get("valueRanges", [])
-
-        # print(gsheet_values)
 
         if not gsheet_values:
             print("No data found.")
@@ -308,9 +292,6 @@ def main(dry_run):
     try:
         previous_parents = ",".join(target_item.get("parents"))
 
-        # print(
-        #     f"move file {target_item['name']} : oldid:{previous_parents} to newid:{MOVE_DIR_ID}"
-        # )
         _ = (
             gdrive_serivice.files()
             .update(

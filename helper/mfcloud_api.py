@@ -12,16 +12,12 @@ import dotenv
 # load config, credential
 dotenv.load_dotenv()
 
-# Credentials you get from registering a new application
-# CLIENT_ID = os.getenv("MFCLOUD_CLIENT_ID")
-# CLIENT_SECRET = os.getenv("MFCLOUD_CLIENT_SECRET")
-
-# OAuth endpoints given in the GitHub API documentation
 AUTHORZATION_BASE_URL = "https://invoice.moneyforward.com/oauth/authorize"
 TOKEN_URL = "https://invoice.moneyforward.com/oauth/token"
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
 # TODO:2022-04-05 token更新時にアクセスするローカルサーバーをつくってハンドリングできないかかんがえてみる
+# TODO:2023-03-28 上のTodoはAPI v3から対応する。
 
 
 @dataclass
@@ -133,6 +129,7 @@ def get_quote_list(
 
 
 # TODO:2022-11-24 ここはAPIの扱いについて問い合わせ中なので、その結果を見て実装する
+# TODO:2023-03-28 ここは残念ながら対応できないので利用しない。issueを作って除去する
 def search_quote_list(
     mfcloud_invoice_session: OAuth2Session,
     per_page_length: int,
