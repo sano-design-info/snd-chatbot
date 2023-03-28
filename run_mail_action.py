@@ -36,7 +36,7 @@ export_dirpath = (
     / f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 )
 
-attachment_files_dirpath = export_dirpath / "attachments"
+attachment_dirpath = export_dirpath / "attachments"
 
 # If modifying these scopes, delete the file token.json.
 # GOOGLE_API_SCOPES = [
@@ -67,14 +67,14 @@ def save_attachment_file(
         .execute()
     )
     # print(attachfile_data)
-    print((attachment_files_dirpath / Path(filename)))
-    with (attachment_files_dirpath / Path(filename)).open("wb") as attachmentfiile:
+    print((attachment_dirpath / Path(filename)))
+    with (attachment_dirpath / Path(filename)).open("wb") as attachmentfiile:
         attachmentfiile.write(base64.urlsafe_b64decode(attachfile_data.get("data")))
 
 
 def generate_dirs() -> None:
     export_dirpath.mkdir(exist_ok=True, parents=True)
-    attachment_files_dirpath.mkdir(exist_ok=True)
+    attachment_dirpath.mkdir(exist_ok=True)
 
 
 def main() -> None:
@@ -221,16 +221,16 @@ def main() -> None:
     # 各種機能を呼び出す
 
     print("[Generate Mail Printable PDF]")
-    generate_mail_printhtml(selected_message, attachment_files_dirpath)
+    generate_mail_printhtml(selected_message, attachment_dirpath)
 
     print("[Generate Excel Printable PDF]")
     generate_pdf_by_renrakukoumoku_excel(
-        attachment_files_dirpath, export_dirpath, google_cred
+        attachment_dirpath, export_dirpath, google_cred
     )
 
     if ask_generate_projectfile:
         print("[Generate template dirs]")
-        generate_projectdir(attachment_files_dirpath, export_dirpath)
+        generate_projectdir(attachment_dirpath, export_dirpath)
         print("[copy project dir]")
         copy_projectdir(export_dirpath)
     else:
@@ -240,11 +240,11 @@ def main() -> None:
     if ask_add_schedule_and_generate_estimate_calcsheet:
         print("[append schedule]")
         add_schedule_spreadsheet(
-            attachment_files_dirpath, google_cred, ask_add_schedule_nextmonth
+            attachment_dirpath, google_cred, ask_add_schedule_nextmonth
         )
 
         print("[add estimate calcsheet]")
-        generate_estimate_calcsheet(attachment_files_dirpath, google_cred)
+        generate_estimate_calcsheet(attachment_dirpath, google_cred)
     else:
         print("[Not Add Scuedule, Generate estimate calcsheet]")
 
