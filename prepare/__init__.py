@@ -224,9 +224,7 @@ def generate_pdf_by_renrakukoumoku_excel(
         upload_results = (
             drive_service.files().create(body=file_metadata, media_body=media).execute()
         )
-
         print(upload_results)
-        # print(upload_results.get("id"))
 
         # pdfファイルを取りに行ってみる
         dl_request = drive_service.files().export_media(
@@ -244,7 +242,6 @@ def generate_pdf_by_renrakukoumoku_excel(
         ) as export_exceltopdf:
             export_exceltopdf.write(file.getvalue())
 
-        # print("[Post Process...]")
         # post-porcess: Googleドキュメントに一時保持した配管連絡項目を除去する
         delete_tmp_excel_result = (
             drive_service.files()
@@ -347,9 +344,6 @@ def add_schedule_spreadsheet(
     ]
 
     sheet_service = build("sheets", "v4", credentials=google_cred)
-
-    # print(schedule_sheet_id, " ", table_search_range, "", )
-    # print(append_values)
 
     # スケジュール表の一番後ろの行へ追加する
     schedule_gsheet = (

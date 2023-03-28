@@ -306,13 +306,9 @@ def get_schedule_table_area(
             append_end_row.get("updates").get("updatedRange"),
         ).group("firstrow")
 
-        # print(append_end_row.get("updates").get("updatedRange"))
-        # print(last_low_range)
-
         schedule_range_matcher = range_addr_pattern.match(search_range)
 
         schedule_table_range = f"{schedule_range_matcher.group(0)}:Q{last_low_range}"
-        # print(schedule_table_range)
 
         schedule_table_res = (
             sheet_service.spreadsheets()
@@ -320,20 +316,16 @@ def get_schedule_table_area(
             .get(spreadsheetId=update_sheet_id, range=schedule_table_range)
             .execute()
         )
-
         # 値が取得できた。
         schedule_table = schedule_table_res.get("values")
-        # print(schedule_table)
 
         # df変換
-
         result_pd = pandas.DataFrame(schedule_table)
         result_pd = result_pd.set_axis(labels=schedule_table[0], axis=1).drop(
             result_pd.index[[0]]
         )
         result_pd = result_pd.set_index(["図番"], drop=False)
-        # print(result_pd)
-        # exit()
+
         return result_pd
 
     except HttpError as error:
@@ -358,12 +350,10 @@ def generate_update_valueranges(
     schedule_range_matcher = range_addr_pattern.match(search_range)
 
     start_row = int(schedule_range_matcher.group("firstrow")) + 1
-    # print(f"{schedule_range_matcher} -> ({start_row})")
 
     result_rangevalues = []
     new_pd_columns = new_pd.columns.tolist()
     new_pd_indexs = new_pd.index.tolist()
-    # print(new_pd_columns)
 
     for table_row_index, (old_index, row) in enumerate(old_pd.iterrows()):
         for table_column_index, (old_column_name, column_by_row) in enumerate(
@@ -377,7 +367,6 @@ def generate_update_valueranges(
                 cell_addr = rangeconvert.rowcol_to_a1(
                     start_row + table_row_index, table_column_index + 1
                 )
-                # print(new_pd.loc[old_index, old_column_name])
                 # 上のrangeaddr, valueの辞書を作る。
                 result_rangevalues.append(
                     {

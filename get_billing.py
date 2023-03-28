@@ -19,7 +19,7 @@ AUTHORZATION_BASE_URL = "https://invoice.moneyforward.com/oauth/authorize"
 TOKEN_URL = "https://invoice.moneyforward.com/oauth/token"
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
-# 2020-01-01 のフォーマットのみ受け付ける
+# `2020-01-01` のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
 
 CONFIG_FILE = Path("mfi_estimate_generator.toml")
