@@ -142,7 +142,7 @@ class ExpandedMessageItem:
 
 
 def generate_mail_printhtml(
-    messageitem: ExpandedMessageItem, export_dirpath: Path
+    messageitem: ExpandedMessageItem, attachment_dirpath: Path
 ) -> None:
     # メール印刷用HTML生成
 
@@ -185,7 +185,7 @@ def generate_mail_printhtml(
         "message_datetime": messageitem.datetime_,
     }
     # レンダリングして出力
-    with (export_dirpath / Path("./export_mail.html")).open(
+    with (attachment_dirpath / Path("./メール本文印刷用ファイル.html")).open(
         "w", encoding="utf8"
     ) as exp_mail_hmtl:
         exp_mail_hmtl.write(tmpl.render(params))
@@ -239,7 +239,7 @@ def generate_pdf_by_renrakukoumoku_excel(
             status, done = downloader.next_chunk()
             print(f"Download {int(status.progress() * 100)}.")
 
-        with (export_dirpath / Path("./export_excel.pdf")).open(
+        with (attachment_dirpath / Path("./連絡項目印刷用ファイル.pdf")).open(
             "wb"
         ) as export_exceltopdf:
             export_exceltopdf.write(file.getvalue())

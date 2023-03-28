@@ -221,7 +221,7 @@ def main() -> None:
     # 各種機能を呼び出す
 
     print("[Generate Mail Printable PDF]")
-    generate_mail_printhtml(selected_message, export_dirpath)
+    generate_mail_printhtml(selected_message, attachment_files_dirpath)
 
     print("[Generate Excel Printable PDF]")
     generate_pdf_by_renrakukoumoku_excel(
