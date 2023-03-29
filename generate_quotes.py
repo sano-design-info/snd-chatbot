@@ -10,12 +10,10 @@ from pprint import pprint
 import re
 
 import click
+import questionary
 
 import dotenv
 import toml
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -203,125 +201,132 @@ def main(dry_run):
     except HttpError as error:
         sys.exit(f"Google Drive APIのエラーが発生しました。: {error}")
 
-    # - 一覧から該当する見積もり計算表を取得
-    print("見積もりを作るスプレッドシートの番号を入力を入れてください。")
-
-    for index, mitsumori_gsheet in enumerate(target_items, 1):
-        print(f"{index:0>2}: 見積名:{mitsumori_gsheet.get('name')}")
-
-    selected_item = input("\n番号を選択してください: ")
+    # 一覧から該当する見積もり計算表を取得
+    selected_estimate_calcsheets = questionary.checkbox(
+        "見積もりを作成する見積もり計算表を選択してください。",
+        choices=[
+            {
+                "name": f"{index:0>2}: {mitsumori_gsheet.get('name')}",
+                "value": mitsumori_gsheet,
+            }
+            for index, mitsumori_gsheet in enumerate(target_items, 1)
+        ],
+    ).ask()
 
     # キャンセル処理を入れる
-    if not selected_item:
+    if not selected_estimate_calcsheets:
         print("操作をキャンセルしました。終了します。")
         sys.exit(0)
-    selected_index = int(selected_item) - 1
 
-    print(
-        f"こちらのシートが選択されています!: {selected_item}:{target_items[selected_index].get('name')}"
-    )
+    print(selected_estimate_calcsheets)
 
+    # TODO:2023-03-29 選択結果を保持して複数の見積書作成を行う
     # 見積のデータを生成
-    estimate_data = {}
-    target_item = target_items[selected_index]
+    quote_datas_set = []
+    for estimate_calcsheet in selected_estimate_calcsheets:
+        estimate_data = {}
 
-    # シートのファイル名から品番生成
-    estimate_data["part_number"] = MISTUMORI_NUMBER_PATTERN.match(
-        target_item.get("name")
-    ).group("number")
+        # シートのファイル名から品番生成
+        estimate_data["part_number"] = MISTUMORI_NUMBER_PATTERN.match(
+            estimate_calcsheet.get("name")
+        ).group("number")
 
-    # GSheetから値取得
-    try:
-        # Call the Sheets API
-        sheet = gsheet_service.spreadsheets()
-        gsheet_result = (
-            sheet.values()
-            .batchGet(
-                spreadsheetId=target_item.get("id"),
-                ranges=list(MITSUMORI_RANGES.values()),
+        # GSheetから値取得
+        try:
+            # Call the Sheets API
+            sheet = gsheet_service.spreadsheets()
+            gsheet_result = (
+                sheet.values()
+                .batchGet(
+                    spreadsheetId=estimate_calcsheet.get("id"),
+                    ranges=list(MITSUMORI_RANGES.values()),
+                )
+                .execute()
             )
-            .execute()
-        )
-        gsheet_values = gsheet_result.get("valueRanges", [])
+            gsheet_values = gsheet_result.get("valueRanges", [])
 
-        if not gsheet_values:
-            print("No data found.")
-            return
+            if not gsheet_values:
+                print("No data found.")
+                return
 
-        for key, value in zip(MITSUMORI_RANGES.keys(), gsheet_values):
-            estimate_data[key] = value.get("values")[0][0]
-        # print(estimate_data)
+            for key, value in zip(MITSUMORI_RANGES.keys(), gsheet_values):
+                estimate_data[key] = value.get("values")[0][0]
 
-    except HttpError as error:
-        sys.exit(f"Google Sheet APIでエラーが発生しました。: {error}")
+        except HttpError as error:
+            sys.exit(f"Google Sheet APIでエラーが発生しました。: {error}")
 
-    # 型変換する
-    estimate_data = seikika_data(estimate_data)
+        # 型変換する
+        estimate_data = seikika_data(estimate_data)
 
-    # 収集した見積情報を元にMFクラウドへ渡すjsonデータを生成
-    quote_data = generate_quote_json_data(**estimate_data)
+        # サマリーを表示する
+        print_quote_info(**estimate_data)
 
-    # サマリーを表示する
-    print_quote_info(**estimate_data)
+        # 収集した見積情報を元にMFクラウドへ渡すjsonデータを生成
+        quote_data = generate_quote_json_data(**estimate_data)
+
+        quote_datas_set.append((quote_data, estimate_data, estimate_calcsheet))
 
     # dry-runはここまで。dry-runは結果をjsonで返す。
     if dry_run:
         print("[dry run]json dump:")
-        pprint(quote_data)
+        pprint(quote_datas_set)
         sys.exit(0)
 
-    generated_quote_result = generate_quote(mfcloud_invoice_session, quote_data)
+    for quote_data, estimate_data, estimate_calcsheet in quote_datas_set:
+        generated_quote_result = generate_quote(mfcloud_invoice_session, quote_data)
 
-    # errorなら終了する
-    if "errors" in generated_quote_result:
-        print("エラーが発生しました。詳細はレスポンスを確認ください")
-        pprint(generated_quote_result)
-        sys.exit(0)
+        # errorなら終了する
+        if "errors" in generated_quote_result:
+            print("エラーが発生しました。詳細はレスポンスを確認ください")
+            pprint(generated_quote_result)
+            sys.exit(0)
 
-    # PDFのファイル名はミスミの型式で行う
-    filename_partname = estimate_data["part_number"]
-    save_filepath = Path("./quote") / f"見積書_MA-{filename_partname}.pdf"
+        # PDFのファイル名はミスミの型式で行う
+        filename_partname = estimate_data["part_number"]
+        save_filepath = Path("./quote") / f"見積書_MA-{filename_partname}.pdf"
 
-    download_quote_pdf(
-        mfcloud_invoice_session,
-        generated_quote_result["data"]["attributes"]["pdf_url"],
-        save_filepath,
-    )
-
-    # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
-    try:
-        previous_parents = ",".join(target_item.get("parents"))
-
-        _ = (
-            gdrive_serivice.files()
-            .update(
-                fileId=target_item["id"],
-                addParents=MOVE_DIR_ID,
-                removeParents=previous_parents,
-                fields="id, parents",
-            )
-            .execute()
+        download_quote_pdf(
+            mfcloud_invoice_session,
+            generated_quote_result["data"]["attributes"]["pdf_url"],
+            save_filepath,
         )
 
-    except HttpError as error:
-        sys.exit(f"スプレッドシート移動時にエラーが発生しました: {error}")
+        # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
+        try:
+            previous_parents = ",".join(estimate_calcsheet.get("parents"))
 
-    # スケジュール表の該当行に価格を追加する
-    target_sheet_id = target_item.get("id")
+            _ = (
+                gdrive_serivice.files()
+                .update(
+                    fileId=estimate_calcsheet["id"],
+                    addParents=MOVE_DIR_ID,
+                    removeParents=previous_parents,
+                    fields="id, parents",
+                )
+                .execute()
+            )
 
-    # 扱う行は一つなので登録も一つのみ
-    estimate_calcsheet_info = EstimateCalcSheetInfo(target_sheet_id)
-    msmanken_info = MsmAnkenMap(estimate_calcsheet_info=estimate_calcsheet_info)
-    msmankenmaplist = MsmAnkenMapList()
-    msmankenmaplist.msmankenmap_list.append(msmanken_info)
+        except HttpError as error:
+            sys.exit(f"スプレッドシート移動時にエラーが発生しました: {error}")
 
-    export_pd = msmankenmaplist.generate_update_sheet_values()
-    before_pd = get_schedule_table_area(table_search_range, google_cred)
+        # スケジュール表の該当行に価格を追加する
+        target_sheet_id = estimate_calcsheet.get("id")
 
-    update_data = generate_update_valueranges(table_search_range, before_pd, export_pd)
-    print(update_data)
+        # 扱う行は一つなので登録も一つのみ
+        estimate_calcsheet_info = EstimateCalcSheetInfo(target_sheet_id)
+        msmanken_info = MsmAnkenMap(estimate_calcsheet_info=estimate_calcsheet_info)
+        msmankenmaplist = MsmAnkenMapList()
+        msmankenmaplist.msmankenmap_list.append(msmanken_info)
 
-    update_schedule_sheet(update_data, google_cred)
+        export_pd = msmankenmaplist.generate_update_sheet_values()
+        before_pd = get_schedule_table_area(table_search_range, google_cred)
+
+        update_data = generate_update_valueranges(
+            table_search_range, before_pd, export_pd
+        )
+        print(f"update result:{update_data}")
+
+        update_schedule_sheet(update_data, google_cred)
 
 
 if __name__ == "__main__":
