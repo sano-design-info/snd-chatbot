@@ -201,6 +201,10 @@ def main(dry_run):
     except HttpError as error:
         sys.exit(f"Google Drive APIのエラーが発生しました。: {error}")
 
+    if not target_items:
+        print("見積もり計算表が見つかりませんでした。終了します。")
+        sys.exit(0)
+
     # 一覧から該当する見積もり計算表を取得
     selected_estimate_calcsheets = questionary.checkbox(
         "見積もりを作成する見積もり計算表を選択してください。",
