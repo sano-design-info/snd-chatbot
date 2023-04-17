@@ -1,7 +1,6 @@
 import base64
 import html
 import io
-import os
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -14,23 +13,23 @@ import dateutil.tz
 import openpyxl
 from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
-from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
-from helper import extract_zip
+from helper import extract_zip, load_config
 
 # load config
-load_dotenv()
-estimate_template_gsheet_id = os.environ["ESTIMATE_TEMPLATE_GSHEET_ID"]
-schedule_sheet_id = os.environ["SCHEDULE_SHEET_ID"]
-msm_gas_boilerplate_url = os.environ["MSM_GAS_BOILERPLATE_URL"]
-gsheet_tmmp_dir_ids = os.environ["GSHEET_TMP_DIR_IDS"]
-table_search_range = os.environ["TABLE_SEARCH_RANGE"]
-copy_project_dir_dest_path = Path(os.environ["COPY_PROJECT_DIR_DEST_PATH"])
+
+config = load_config.CONFIG
+estimate_template_gsheet_id = config.get("google").get("ESTIMATE_TEMPLATE_GSHEET_ID")
+schedule_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
+msm_gas_boilerplate_url = config.get("other").get("MSM_GAS_BOILERPLATE_URL")
+gsheet_tmmp_dir_ids = config.get("google").get("GSHEET_TMP_DIR_IDS")
+table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
+copy_project_dir_dest_path = Path(config.get("other").get("COPY_PROJECT_DIR_DEST_PATH"))
 
 # Path
 parent_dirpath = Path(__file__).parents[1]

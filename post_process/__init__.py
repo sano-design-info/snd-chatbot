@@ -1,24 +1,20 @@
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
-from datetime import datetime
 
-import dotenv
 import openpyxl
 import pandas
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from helper import google_api_helper, api_scopes, rangeconvert
+from helper import api_scopes, google_api_helper, load_config, rangeconvert
 
-dotenv.load_dotenv()
+config = load_config.CONFIG
+table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
+update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
 
-table_search_range = os.environ["TABLE_SEARCH_RANGE"]
-
-update_sheet_id = os.environ["SCHEDULE_SHEET_ID"]
 
 # TODO: 2022/12/28 これは定数的にしてもいいかな。
 msm_anken_number_pattern = re.compile(r"(MA-\d{4}).*")

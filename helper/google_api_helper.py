@@ -1,17 +1,18 @@
-import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+import toml
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-
 # load config
-load_dotenv()
+from helper import load_config
+
+config = load_config.CONFIG
+cred_filepath = config.get("google").get("CRED_FILEPATH")
 
 # generate Path
 parent_dirpath = Path(__file__).parents[1]
-cred_filepath = os.environ["CRED_FILEPATH"]
 token_save_path = parent_dirpath / "token.json"
 cred_json = parent_dirpath / cred_filepath
 

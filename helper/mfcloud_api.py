@@ -1,16 +1,15 @@
-from dataclasses import dataclass
 import json
-
-# import json
-from pathlib import Path
 import pickle
-from requests_oauthlib import OAuth2Session
-import os
+from dataclasses import dataclass
+from pathlib import Path
 
-import dotenv
+from requests_oauthlib import OAuth2Session
+
+from helper import load_config
 
 # load config, credential
-dotenv.load_dotenv()
+
+config = load_config.CONFIG
 
 AUTHORZATION_BASE_URL = "https://invoice.moneyforward.com/oauth/authorize"
 TOKEN_URL = "https://invoice.moneyforward.com/oauth/token"
@@ -22,8 +21,8 @@ API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
 @dataclass
 class MFCICledential:
-    client_id: str = os.getenv("MFCLOUD_CLIENT_ID")
-    client_secret: str = os.getenv("MFCLOUD_CLIENT_SECRET")
+    client_id: str = config.get("mfci").get("MFCLOUD_CLIENT_ID")
+    client_secret: str = config.get("mfci").get("MFCLOUD_CLIENT_SECRET")
     _token = None
 
     def _load_token(self):

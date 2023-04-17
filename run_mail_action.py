@@ -1,31 +1,25 @@
 import base64
-from datetime import datetime
 import itertools
-import os
+from datetime import datetime
 from pathlib import Path
-import shutil
 
 import questionary
-from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from helper import google_api_helper, api_scopes
+from helper import api_scopes, google_api_helper
 from prepare import (
     ExpandedMessageItem,
     add_schedule_spreadsheet,
+    copy_projectdir,
     generate_estimate_calcsheet,
     generate_mail_printhtml,
     generate_pdf_by_renrakukoumoku_excel,
     generate_projectdir,
-    copy_projectdir,
 )
 
-
-# load config
-load_dotenv()
-target_userid = os.environ["GMAIL_USER_ID"]
+target_userid = "me"
 
 # generate Path
 parent_dirpath = Path(__file__).parents[0]

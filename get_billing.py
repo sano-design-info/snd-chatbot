@@ -1,30 +1,19 @@
 # coding: utf-8
-from dataclasses import asdict, dataclass, field
 import json
 import sys
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-import dotenv
-import toml
-
-from helper.mfcloud_api import MFCICledential, get_quote_list
-
-
-# load config, credential
-dotenv.load_dotenv()
-
-AUTHORZATION_BASE_URL = "https://invoice.moneyforward.com/oauth/authorize"
-TOKEN_URL = "https://invoice.moneyforward.com/oauth/token"
-API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
+from helper import load_config
+from helper.mfcloud_api import API_ENDPOINT, MFCICledential, get_quote_list
 
 # `2020-01-01` のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
 
-CONFIG_FILE = Path("mfi_estimate_generator.toml")
-config = toml.load(CONFIG_FILE)
 
+config = load_config.CONFIG
 MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
 QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
 

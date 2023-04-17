@@ -1,24 +1,18 @@
 # coding: utf-8
 import json
-import os
-import os.path
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
 from pprint import pprint
 
-import re
-
 import click
 import questionary
-
-import dotenv
-import toml
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from helper import api_scopes, google_api_helper, load_config
 from helper.mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
-from helper import google_api_helper, api_scopes
 from post_process import (
     EstimateCalcSheetInfo,
     MsmAnkenMap,
@@ -28,31 +22,25 @@ from post_process import (
     update_schedule_sheet,
 )
 
-# load config, credential
-dotenv.load_dotenv()
-GOOGLE_CREDENTIAL = os.environ.get("CRED_FILEPATH")
-
 # 2020-01-01 のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
-
-CONFIG_FILE = Path("mfi_estimate_generator.toml")
-config = toml.load(CONFIG_FILE)
-
-MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
-MITSUMORI_DIR_IDS = config.get("googledrive").get("MITSUMORI_DIR_IDS")
-
-MISTUMORI_NUMBER_PATTERN = re.compile("^.*_MA-(?P<number>.*)")
-
 GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
-
+MISTUMORI_NUMBER_PATTERN = re.compile("^.*_MA-(?P<number>.*)")
 # TODO:2023-03-28 これはもう使わないはずなので削除する。issue作ること
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
+
+# load config, credential
+
+config = load_config.CONFIG
+
+MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
+MITSUMORI_DIR_IDS = config.get("google").get("MITSUMORI_DIR_IDS")
 MITSUMORI_RANGES = config["mapping"]
-MOVE_DIR_ID = config.get("googledrive").get("MOVE_DIR_ID")
+MOVE_DIR_ID = config.get("google").get("MOVE_DIR_ID")
 
-
-table_search_range = os.environ["TABLE_SEARCH_RANGE"]
+GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
+table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 
 
 def print_quote_info(**kargs):
