@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,14 +11,12 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from helper import api_scopes, google_api_helper, load_config, rangeconvert
+from helper.regexpatterns import MSM_ANKEN_NUMBER
 
 config = load_config.CONFIG
 table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
 
-
-# TODO: 2022/12/28 これは定数的にしてもいいかな。
-msm_anken_number_pattern = re.compile(r"(MA-\d{4}).*")
 
 range_addr_pattern = re.compile(
     r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
@@ -26,6 +25,15 @@ range_addr_pattern = re.compile(
 google_cred: Credentials = google_api_helper.get_cledential(
     api_scopes.GOOGLE_API_SCOPES
 )
+
+
+def fix_datetime(datetime_str: str) -> datetime:
+    """
+    日付の入力の区切り文字を修正する。
+    """
+    for splitecahr in (".", "/"):
+        if splitecahr in datetime_str:
+            return datetime.strptime(datetime_str, splitecahr.join(("%Y", "%m", "%d")))
 
 
 @dataclass
@@ -43,7 +51,7 @@ class RenrakukoumokuInfo:
 
     def __post_init__(self):
         # 念のために前処理でスペースがあれば除去してる
-        self.anken_base_number = msm_anken_number_pattern.search(
+        self.anken_base_number = MSM_ANKEN_NUMBER.search(
             self.renrakukoumoku_path.name.replace(" ", "")
         ).group(1)
 
@@ -82,9 +90,7 @@ class CsvFileInfo:
         self.anken_number = self.csv_filepath.stem.replace(" ", "").replace("_", "-")
 
         # 正規表現で MA-0000, MA-0000-1という
-        self.anken_base_number = msm_anken_number_pattern.search(
-            self.anken_number
-        ).group(1)
+        self.anken_base_number = MSM_ANKEN_NUMBER.search(self.anken_number).group(1)
 
         csv_pd = pandas.read_csv(self.csv_filepath, encoding="shift-jis")
         hose_parts_pd = csv_pd[csv_pd["品名"] == "ホース(継手付)"]
@@ -105,8 +111,10 @@ class EstimateCalcSheetInfo:
     calcsheet_source: str | Path
     anken_number: str = field(init=False)
     anken_base_number: str = field(init=False)
-
-    nouki: str = field(init=False)
+    calcsheet_parents: list[str] = field(init=False)
+    duration: datetime = field(init=False)
+    duration_str: str = field(init=False)
+    # TODO:2023-04-19 ここはstrだが、利用する場所でintに置き換えるのでstrで良い
     price: str = field(init=False)
 
     def __post_init__(self):
@@ -120,12 +128,13 @@ class EstimateCalcSheetInfo:
                 pass
             # gsheet形式: IDの羅列なのでIDが利用できるかはAPIに問い合わせる
             case str():
+                # TODO:2023-04-19 ここはtryの中身が多すぎるので、API問い合わせ事にexceptする。
                 try:
                     sheet_service = build("sheets", "v4", credentials=google_cred)
 
                     # スプレッドシート名を収集して、anken_numberを生成
 
-                    estimate_calc_gsheet_res = (
+                    self.gsheet_values = (
                         sheet_service.spreadsheets()
                         .get(
                             spreadsheetId=self.calcsheet_source,
@@ -133,29 +142,29 @@ class EstimateCalcSheetInfo:
                         .execute()
                     )
 
-                    self.anken_number = msm_anken_number_pattern.search(
-                        estimate_calc_gsheet_res["properties"]["title"]
+                    self.anken_number = MSM_ANKEN_NUMBER.search(
+                        self.gsheet_values["properties"]["title"]
                     ).group(0)
-                    self.anken_base_number = msm_anken_number_pattern.search(
+                    self.anken_base_number = MSM_ANKEN_NUMBER.search(
                         self.anken_number
                     ).group(1)
 
                     # 古い仕様のシートと新しいシートの違いで、range_mapを変える。計算結果シートがある場合はそこを参照
                     estimate_calc_sheetnames = [
                         sheets["properties"]["title"]
-                        for sheets in estimate_calc_gsheet_res["sheets"]
+                        for sheets in self.gsheet_values["sheets"]
                     ]
                     # print(estimate_calc_sheetnames)
                     # TODO:2023-01-12 この部分は判断方法と結果を返す関数にした方がいいと思われる。クラスの裏に分離したほうがいいな
                     range_map = {
                         "Sheet1!F17": "price",
-                        "Sheet1!F1": "nouki",
+                        "Sheet1!F1": "duration",
                     }
 
                     if "計算結果" in estimate_calc_sheetnames:
                         range_map = {
                             "'計算結果'!B5": "price",
-                            "'計算結果'!B6": "nouki",
+                            "'計算結果'!B6": "duration",
                         }
 
                     # シートの情報を収集して各フィールドへ追加す各
@@ -166,7 +175,7 @@ class EstimateCalcSheetInfo:
                         .batchGet(
                             spreadsheetId=self.calcsheet_source,
                             ranges=range_names,
-                            valueRenderOption="UNFORMATTED_VALUE",
+                            # valueRenderOption="UNFORMATTED_VALUE",
                         )
                         .execute()
                     )
@@ -176,7 +185,10 @@ class EstimateCalcSheetInfo:
                             range_map[res_value.get("range")],
                             str(res_value.get("values")[0][0]),
                         )
-                    self.nouki = self.nouki.replace(".", "/")
+                    # gsheetで取り込んだ結果が数字になってしまう...
+                    self.duration = fix_datetime(self.duration)
+                    self.duration_str = self.duration.strftime("%Y/%m/%d")
+                    self.price = re.sub(r"[\¥\,]", "", self.price)
 
                 except HttpError as error:
                     # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
@@ -193,6 +205,10 @@ class EstimateCalcSheetInfo:
 # TODO:2022-12-29 案件マップというよりは、コンバーターという名前のほうがしっくりくる
 @dataclass
 class MsmAnkenMap:
+    """
+    各案件の情報をまとめるためのクラス
+    anken_number, anken_basenumberのフォーマットは "MA-0000" のような"MA-"の接頭辞ありのものを想定している
+    """
 
     csvfile_info: CsvFileInfo | None = None
     estimate_calcsheet_info: EstimateCalcSheetInfo | None = None
@@ -232,7 +248,7 @@ class MsmAnkenMapList:
 
     # 名寄せ用のマップ
     schedule_sheet_map: ClassVar[dict] = {
-        "納期": "estimate_calcsheet_info.nouki",
+        "納期": "estimate_calcsheet_info.duration_str",
         "金額(税抜)": "estimate_calcsheet_info.price",
         "ガス本数": "csvfile_info.gas_qty",
         "ホース本数": "csvfile_info.hose_qty",

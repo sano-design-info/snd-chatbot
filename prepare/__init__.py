@@ -73,11 +73,14 @@ class ExpandedMessageItem:
 
     id: str = field(init=False)
     title: str = field(init=False)
-    from_addresss: str = field(init=False)
+    subject: str = field(init=False)
+    from_address: str = field(init=False)
+    to_address: str = field(init=False)
     cc_address: str = field(init=False)
     datetime_: datetime = field(init=False)
     body_related: dict = field(init=False)
     body_parts: dict = field(init=False)
+    body: str = field(init=False)
 
     def __post_init__(self):
         self.payload = self.gmail_message.get("payload")
@@ -87,14 +90,20 @@ class ExpandedMessageItem:
         self.title = next((i for i in self.headers if i.get("name") == "Subject")).get(
             "value"
         )
+        self.subject = self.title
 
-        self.from_addresss = next(
+        self.from_address = next(
             (i for i in self.headers if i.get("name") == "From")
         ).get("value")
 
-        self.cc_address = next((i for i in self.headers if i.get("name") == "CC")).get(
+        self.to_address = next((i for i in self.headers if i.get("name") == "To")).get(
             "value"
         )
+
+        # CCのアドレスがある場合は、CCのアドレスを取得する。無い場合は空文字を入れる
+        self.cc_address = next(
+            (i for i in self.headers if i.get("name") == "CC"), {}
+        ).get("value", "")
 
         self.datetime_ = convert_gmail_datetimestr(
             next((i for i in self.headers if i.get("name") == "Date")).get("value")
@@ -105,39 +114,57 @@ class ExpandedMessageItem:
         self.body_related = {}
 
         # ここはtext plane or multipart/altanative or multipart/related >  multipart/altanative の構造になってるらしいので、分離した処理に切り替えないといけない
-        mail_part_mimetype = next(
-            i for i in self.payload.get("parts") if i.get("partId") == "0"
-        ).get("mimeType")
 
-        match mail_part_mimetype:
-            case "text/plain":
-                self.body_parts = self.payload.get("parts")
-            case "multipart/alternative":
-                self.body_parts = next(
-                    (
-                        i
-                        for i in self.payload.get("parts")
-                        if i.get("mimeType") == "multipart/alternative"
-                    ),
-                    {},
-                ).get("parts")
-            case "multipart/related":
-                self.body_related = next(
-                    (
-                        i
-                        for i in self.payload.get("parts")
-                        if i.get("mimeType") == "multipart/related"
+        # partsがない場合 = シンプルなテキストベースの場合
+        if not self.payload.get("parts"):
+            self.body_parts = [self.payload]
+        else:
+            # リッチテキスト系の場合
+            mail_part_mimetype = next(
+                i.get("mimeType")
+                for i in self.payload.get("parts")
+                if i.get("partId") in ("0")
+            )
+
+            match mail_part_mimetype:
+                case "text/plain":
+                    self.body_parts = self.payload.get("parts")
+                case "multipart/alternative":
+                    self.body_parts = next(
+                        (
+                            i
+                            for i in self.payload.get("parts")
+                            if i.get("mimeType") == "multipart/alternative"
+                        ),
+                        {},
+                    ).get("parts")
+                case "multipart/related":
+                    self.body_related = next(
+                        (
+                            i
+                            for i in self.payload.get("parts")
+                            if i.get("mimeType") == "multipart/related"
+                        )
                     )
-                )
-                self.body_parts = next(
-                    (
-                        i
-                        for i in self.body_related.get("parts")
-                        if i.get("mimeType") == "multipart/alternative"
-                    )
-                ).get("parts")
-            case _:
-                pass
+                    self.body_parts = next(
+                        (
+                            i
+                            for i in self.body_related.get("parts")
+                            if i.get("mimeType") == "multipart/alternative"
+                        )
+                    ).get("parts")
+                case _:
+                    pass
+
+        # body_partsからbodyを取得する
+        mailbody = next(
+            (
+                i["body"]["data"]
+                for i in self.body_parts
+                if "text/plain" in i.get("mimeType")
+            )
+        )
+        self.body = decode_base64url(mailbody).decode("utf8")
 
 
 def generate_mail_printhtml(
@@ -145,6 +172,7 @@ def generate_mail_printhtml(
 ) -> None:
     # メール印刷用HTML生成
 
+    # TODO:2023-04-07 この部分はExpandMessageItemへ移動する
     # TODO:2022-12-27 個々の実装はhtmlかplaneで最初から分けたほうがいいかも
     messages_text_parts = next(
         (i for i in messageitem.body_parts if "text/html" in i.get("mimeType")), None
@@ -179,7 +207,7 @@ def generate_mail_printhtml(
     params = {
         "export_html": mail_body,
         "message_title": html.escape(messageitem.title),
-        "message_from_addresss": html.escape(messageitem.from_addresss),
+        "message_from_address": html.escape(messageitem.from_address),
         "message_cc_address": html.escape(messageitem.cc_address),
         "message_datetime": messageitem.datetime_,
     }

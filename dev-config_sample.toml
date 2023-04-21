@@ -1,0 +1,54 @@
+[google]
+API利用時の認証のjsonファイル。
+CRED_FILEPATH = "json path"
+
+# 見積計算表の検索先DIR
+MITSUMORI_DIR_IDS = [""]
+# 見積計算表を移動するDIR
+MOVE_DIR_ID = ""
+
+# GmailのユーザーID, meは認証したユーザーと同じ意味
+GMAIL_USER_ID = "me"
+# 一時的に配管連絡項目を生成するファイルを補完するDIR
+GSHEET_TMP_DIR_IDS = [""]
+# スケジュール表の情報更新をする先のシート名
+TABLE_SEARCH_RANGE = ""
+
+# 見積計算表のテンプレシートのID
+ESTIMATE_TEMPLATE_GSHEET_ID = ""
+# スケジュール表のシートID
+SCHEDULE_SHEET_ID = ""
+
+[mfci]
+# 取引先IDの取得方法: 取引先一覧 -> そのIDではなく、そのID -> 取引先取得 -> relationships>departments>data>id が取引先ID
+# 旧個人事業側の事業所で使ってた取引先ID
+TORIHIKISAKI_ID = ""
+
+# 認証情報
+MFCLOUD_CLIENT_ID=""
+MFCLOUD_CLIENT_SECRET=""
+
+TORIHIKISAKI_NAME = "（株）ミスミ プレス事業部 自動車型事業チーム"
+QUOTE_PER_PAGE = 100
+
+[mapping]
+price = "計算結果!B5"
+duration = "計算結果!B6"
+discount_flag = "計算結果!B7"
+
+[mail_template]
+# 本文
+body = """
+メールテンプレートです
+納期置き換えテスト{{nouki}}
+
+---
+
+ここに署名を入れるとちょうどよいです
+"""
+
+[other]
+# ボイラープレートのgiturl
+MSM_GAS_BOILERPLATE_URL="http://192.168.35.52:3000/snd-private/misumi-gas-boilerplate.git"
+# run_mail_actionで生成したフォルダのコピー先
+COPY_PROJECT_DIR_DEST_PATH = ""

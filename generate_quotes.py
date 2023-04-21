@@ -1,7 +1,9 @@
 # coding: utf-8
+import itertools
 import json
 import re
 import sys
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from pprint import pprint
@@ -11,7 +13,7 @@ import questionary
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from helper import api_scopes, google_api_helper, load_config
+from helper import api_scopes, google_api_helper, load_config, regexpatterns
 from helper.mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
 from post_process import (
     EstimateCalcSheetInfo,
@@ -29,9 +31,7 @@ MISTUMORI_NUMBER_PATTERN = re.compile("^.*_MA-(?P<number>.*)")
 # TODO:2023-03-28 これはもう使わないはずなので削除する。issue作ること
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 
-
 # load config, credential
-
 config = load_config.CONFIG
 
 MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
@@ -42,119 +42,101 @@ MOVE_DIR_ID = config.get("google").get("MOVE_DIR_ID")
 GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
 table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 
+MAIL_TEMPLATE = config.get("mail_template")
 
-def print_quote_info(**kargs):
+
+@dataclass
+class QuoteItem(EstimateCalcSheetInfo):
     """
-    生成した見積情報をワンラインで表示する
-    """
-
-    print(
-        f'見積情報: 型式:MA-{kargs["part_number"]} 日時:{kargs["duration"]} 価格:{kargs["price"]}'
-    )
-
-
-def fix_datetime(datetime_str: str) -> datetime:
-    """
-    日付の入力の区切り文字を修正する。
-    """
-    for splitecahr in (".", "/"):
-        if splitecahr in datetime_str:
-            return datetime.strptime(datetime_str, splitecahr.join(("%Y", "%m", "%d")))
-
-
-def seikika_data(estimate_data: dict) -> dict:
-
-    # 入る値は全てイミュータブルなのでcopyでヨシにした
-    result_data = estimate_data.copy()
-
-    # 日付文字列をdatetime化する、日付が未定の場合（入ってないや文字列の場合）はそのままスルーする
-    if isinstance(fix_datetime(estimate_data["duration"]), datetime):
-        duration_str = f"納期 {fix_datetime(estimate_data['duration']): %m/%d}"
-    else:
-        duration_str = f"納期 {estimate_data['duration']}"
-    result_data["duration"] = duration_str
-
-    result_data["price"] = int(re.sub(r"[\¥\,]", "", estimate_data["price"]))
-    result_data["discount_flag"] = int(re.sub(r"[\¥\,]", "", estimate_data["price"]))
-
-    return result_data
-
-
-def generate_quote_json_data(**kargs) -> dict:
-    """
-    見積情報を元に、MFクラウド請求書APIで使う見積書作成のjsonを生成する
+    見積書の各案件事のグループ化を行うためのクラス
     """
 
-    today_datetime = datetime.now().strftime(START_DATE_FORMAT)
-    quote_json_template = """
-    {
-        "quote": {
-            "department_id": "",
-            "quote_date": "2020-05-08",
-            "title": "string_Testtitle",
-            "note": "",
-            "memo": "",
-            "tags": "佐野設計自動生成",
-            "items": [
-                {
-                    "name": "品目",
-                    "detail": "詳細",
-                    "unit_price": 0,
-                    "unit": "",
-                    "quantity": 0,
-                    "excise": true
-                }
-            ]
+    estimate_pdf_path: Path = field(init=False, default=None)
+    mfci_quote_json: dict = field(init=False, default=None)
+
+    def __post_init__(self):
+        # 継承元のpost_initを呼ぶ
+        super().__post_init__()
+        # 収集した見積もり計算書の情報を元に見積書用のjsonを生成する
+        self._convert_mfcloud_quote_json_data()
+
+    def print_quote_info(self) -> None:
+        """
+        生成した見積情報をワンラインで表示する
+        """
+        print(f"見積情報: 型式:{self.anken_number} 日時:{self.duration} 価格:{self.price}")
+
+    def _convert_mfcloud_quote_json_data(self) -> None:
+        """
+        見積情報を元に、MFクラウド請求書APIで使う見積書作成のjsonを生成する。結果はmfci_quote_jsonへ入れる
+        """
+
+        today_datetime = datetime.now().strftime(START_DATE_FORMAT)
+        quote_json_template = """
+        {
+            "quote": {
+                "department_id": "",
+                "quote_date": "2020-05-08",
+                "title": "string_Testtitle",
+                "note": "",
+                "memo": "",
+                "tags": "佐野設計自動生成",
+                "items": [
+                    {
+                        "name": "品目",
+                        "detail": "詳細",
+                        "unit_price": 0,
+                        "unit": "",
+                        "quantity": 0,
+                        "excise": true
+                    }
+                ]
+            }
         }
-    }
-    """
+        """
 
-    # jsonでロードする
-    quote_data = json.loads(quote_json_template)
+        # jsonでロードする
+        quote_data = json.loads(quote_json_template)
 
-    # department_idはミスミのものを利用
-    quote_data["quote"]["department_id"] = MISUMI_TORIHIKISAKI_ID
+        # department_idはミスミのものを利用
+        quote_data["quote"]["department_id"] = MISUMI_TORIHIKISAKI_ID
 
-    # 各情報を入れる
+        # 結果をjsonで返す
+        quote_data["quote"]["title"] = "ガススプリング配管図作製費"
+        quote_data["quote"]["quote_date"] = today_datetime
+        quote_data["quote"]["items"][0]["name"] = "{} ガススプリング配管図".format(
+            self.anken_number
+        )
+        quote_data["quote"]["items"][0]["quantity"] = 1
+        quote_data["quote"]["items"][0]["detail"] = f"納期 {self.duration:%m/%d}"
+        quote_data["quote"]["items"][0]["unit_price"] = int(self.price)
 
-    # 結果をjsonで返す
+        # LRは条件判断を行う
+        rh_flag = self.anken_number.split("-")[-1]
+        if rh_flag in ("RH", "LH") != 0:
+            # RHの場合はLH, LHの場合はRHの備考文章を作成
+            reverse_part_number = "MA-" + "-".join(self.anken_number.split("-")[0:-1])
+            if rh_flag == "RH":
+                reverse_part_number = reverse_part_number + "-LH"
+            else:
+                reverse_part_number = reverse_part_number + "-RH"
 
-    quote_data["quote"]["title"] = "ガススプリング配管図作製費"
-
-    quote_data["quote"]["quote_date"] = today_datetime
-    quote_data["quote"]["items"][0]["name"] = "MA-{} ガススプリング配管図".format(
-        kargs["part_number"]
-    )
-    quote_data["quote"]["items"][0]["quantity"] = 1
-    quote_data["quote"]["items"][0]["detail"] = kargs["duration"]
-    quote_data["quote"]["items"][0]["unit_price"] = kargs["price"]
-
-    # LRは条件判断を行う
-    rh_flag = kargs["part_number"].split("-")[-1]
-
-    # TODO:2022-11-14 discount_flagはもう利用していないので、2022-11-14現在で最新の計算表v2で問題がなくなったらand条件を外す
-    if rh_flag in ("RH", "LH") and int(kargs["discount_flag"]) != 0:
-
-        # RHの場合はLH, LHの場合はRHの備考文章を作成
-        reverse_part_number = "MA-" + "-".join(kargs["part_number"].split("-")[0:-1])
-
-        if rh_flag == "RH":
-            reverse_part_number = reverse_part_number + "-LH"
-        else:
-            reverse_part_number = reverse_part_number + "-RH"
-
-        quote_data["quote"]["note"] = "本見積は{}の対象側作図案件となります".format(reverse_part_number)
-    return quote_data
+            quote_data["quote"]["note"] = "本見積は{}の対象側作図案件となります".format(
+                reverse_part_number
+            )
+        self.mfci_quote_json = quote_data
 
 
 @click.command()
 @click.option("--dry-run", is_flag=True, help="Dry Run Flag")
 def main(dry_run):
+    # 一連の操作中に使うデータ構造を入れるリスト（グループ化はメール生成時に行う）
+    quote_items: list[QuoteItem] = []
 
     # Googleのtokenを用意
     google_cred = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
     gdrive_serivice = build("drive", "v3", credentials=google_cred)
-    gsheet_service = build("sheets", "v4", credentials=google_cred)
+    gmail_service = build("gmail", "v1", credentials=google_cred)
 
     # mfcloudのセッション作成
     mfci_cred = MFCICledential()
@@ -166,6 +148,7 @@ def main(dry_run):
 
     # テンプレフォルダ内もフィルターにいれる。その時にテンプレートは除外する
     dir_ids_query = " or ".join((f"'{id}' in parents " for id in MITSUMORI_DIR_IDS))
+    # TODO: 2023-04-20ここの検索もgoogleapiのhelperに移動したい
     try:
         contain_mitumori_folder_query = f"""
         ({dir_ids_query})
@@ -193,6 +176,8 @@ def main(dry_run):
         print("見積もり計算表が見つかりませんでした。終了します。")
         sys.exit(0)
 
+    # TODO:2023-04-19 ここのnameはスプレッドシートの名称ではなくて案件番号にする方がいい。
+
     # 一覧から該当する見積もり計算表を取得
     selected_estimate_calcsheets = questionary.checkbox(
         "見積もりを作成する見積もり計算表を選択してください。",
@@ -210,62 +195,27 @@ def main(dry_run):
         print("操作をキャンセルしました。終了します。")
         sys.exit(0)
 
-    print(selected_estimate_calcsheets)
-
-    # TODO:2023-03-29 選択結果を保持して複数の見積書作成を行う
-    # 見積のデータを生成
-    quote_datas_set = []
+    # MFクラウドの見積書jsonデータを作成させて関連結果含めてQuoteItemに入れる
     for estimate_calcsheet in selected_estimate_calcsheets:
-        estimate_data = {}
-
-        # シートのファイル名から品番生成
-        estimate_data["part_number"] = MISTUMORI_NUMBER_PATTERN.match(
-            estimate_calcsheet.get("name")
-        ).group("number")
-
-        # GSheetから値取得
-        try:
-            # Call the Sheets API
-            sheet = gsheet_service.spreadsheets()
-            gsheet_result = (
-                sheet.values()
-                .batchGet(
-                    spreadsheetId=estimate_calcsheet.get("id"),
-                    ranges=list(MITSUMORI_RANGES.values()),
-                )
-                .execute()
-            )
-            gsheet_values = gsheet_result.get("valueRanges", [])
-
-            if not gsheet_values:
-                print("No data found.")
-                return
-
-            for key, value in zip(MITSUMORI_RANGES.keys(), gsheet_values):
-                estimate_data[key] = value.get("values")[0][0]
-
-        except HttpError as error:
-            sys.exit(f"Google Sheet APIでエラーが発生しました。: {error}")
-
-        # 型変換する
-        estimate_data = seikika_data(estimate_data)
-
+        quote_item = QuoteItem(estimate_calcsheet.get("id"))
+        quote_item.calcsheet_parents = estimate_calcsheet.get("parents")
         # サマリーを表示する
-        print_quote_info(**estimate_data)
-
-        # 収集した見積情報を元にMFクラウドへ渡すjsonデータを生成
-        quote_data = generate_quote_json_data(**estimate_data)
-
-        quote_datas_set.append((quote_data, estimate_data, estimate_calcsheet))
+        quote_item.print_quote_info()
+        # itemをリストアップ
+        quote_items.append(quote_item)
 
     # dry-runはここまで。dry-runは結果をjsonで返す。
     if dry_run:
         print("[dry run]json dump:")
-        pprint(quote_datas_set)
+        pprint(quote_items)
         sys.exit(0)
 
-    for quote_data, estimate_data, estimate_calcsheet in quote_datas_set:
-        generated_quote_result = generate_quote(mfcloud_invoice_session, quote_data)
+    # MFクラウドで見積書作成
+    for quote_item in quote_items:
+        # 見積書作成
+        generated_quote_result = generate_quote(
+            mfcloud_invoice_session, quote_item.mfci_quote_json
+        )
 
         # errorなら終了する
         if "errors" in generated_quote_result:
@@ -273,24 +223,25 @@ def main(dry_run):
             pprint(generated_quote_result)
             sys.exit(0)
 
-        # PDFのファイル名はミスミの型式で行う
-        filename_partname = estimate_data["part_number"]
-        save_filepath = Path("./quote") / f"見積書_MA-{filename_partname}.pdf"
-
+        # PDFのファイル名はミスミの型式をつける
+        quote_item.estimate_pdf_path = (
+            Path("./quote") / f"見積書_{quote_item.anken_number}.pdf"
+        )
         download_quote_pdf(
             mfcloud_invoice_session,
             generated_quote_result["data"]["attributes"]["pdf_url"],
-            save_filepath,
+            quote_item.estimate_pdf_path,
         )
 
         # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
+        # TODO: 2023-04-20 ここは関数として切り出す -> helper.googleapi
         try:
-            previous_parents = ",".join(estimate_calcsheet.get("parents"))
+            previous_parents = ",".join(quote_item.calcsheet_parents)
 
             _ = (
                 gdrive_serivice.files()
                 .update(
-                    fileId=estimate_calcsheet["id"],
+                    fileId=quote_item.calcsheet_source,
                     addParents=MOVE_DIR_ID,
                     removeParents=previous_parents,
                     fields="id, parents",
@@ -301,24 +252,55 @@ def main(dry_run):
         except HttpError as error:
             sys.exit(f"スプレッドシート移動時にエラーが発生しました: {error}")
 
-        # スケジュール表の該当行に価格を追加する
-        target_sheet_id = estimate_calcsheet.get("id")
-
-        # 扱う行は一つなので登録も一つのみ
-        estimate_calcsheet_info = EstimateCalcSheetInfo(target_sheet_id)
-        msmanken_info = MsmAnkenMap(estimate_calcsheet_info=estimate_calcsheet_info)
+        # スケジュール表の該当行に価格や納期を追加する
+        msmanken_info = MsmAnkenMap(estimate_calcsheet_info=quote_item)
         msmankenmaplist = MsmAnkenMapList()
         msmankenmaplist.msmankenmap_list.append(msmanken_info)
 
         export_pd = msmankenmaplist.generate_update_sheet_values()
         before_pd = get_schedule_table_area(table_search_range, google_cred)
-
         update_data = generate_update_valueranges(
             table_search_range, before_pd, export_pd
         )
         print(f"update result:{update_data}")
 
         update_schedule_sheet(update_data, google_cred)
+
+    # メールの下書きを生成。案件のベース番号をもとにグルーピングをして一つのメールに複数の見積を添付する
+    quote_groups = itertools.groupby(quote_items, lambda x: x.anken_base_number)
+
+    for group_key, quote_iter in quote_groups:
+        # quote_itemsをlistに変換する
+        quote_items = list(quote_iter)
+
+        # メール生成のテンプレは別のファイルに書く。
+        # 納期はグループ内最初のQuoteItemのものを利用（案件に対して同じ納期を設定している前提）
+        mail_template_body: str = config.get("mail_template").get("body")
+        replybody = mail_template_body.replace("{{nouki}}", quote_items[0].duration_str)
+
+        # メールのスレッドを取得して、スレッドに返信する
+        searchquery = f"label:snd-ミスミ subject:(*{group_key}*)"
+
+        threads = google_api_helper.search_threads(gmail_service, searchquery)
+        if not threads:
+            sys.exit("スレッドが見つかりませんでした。メール返信作成を中止します。")
+
+        # TODO:2023-04-18 ここは複数スレッドがあった場合は選択制にする。出ない場合は一番上のものを使いますと、タイトルを出して確認させる。
+        # メッセージが大抵一つだが、一番上を取り出す（一番上が最新のはず）
+        message = google_api_helper.get_messages_by_threadid(
+            gmail_service, threads[0].get("id", "")
+        )[0]
+
+        # 返信メッセージで下書きを生成
+        print(
+            google_api_helper.append_draft_message(
+                gmail_service,
+                replybody,
+                (quote_item.estimate_pdf_path for quote_item in quote_items),
+                message["id"],
+                threads[0].get("id", ""),
+            )
+        )
 
 
 if __name__ == "__main__":

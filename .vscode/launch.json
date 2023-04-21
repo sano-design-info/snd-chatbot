@@ -12,6 +12,14 @@
             "program": "run_mail_action.py",
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "Python: generate_quote",
+            "type": "python",
+            "request": "launch",
+            "program": "generate_quote.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }
