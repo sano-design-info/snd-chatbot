@@ -1,5 +1,5 @@
 [google]
-API利用時の認証のjsonファイル。
+# API利用時の認証のjsonファイル。
 CRED_FILEPATH = "json path"
 
 # 見積計算表の検索先DIR
