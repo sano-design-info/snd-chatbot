@@ -42,7 +42,7 @@ MOVE_DIR_ID = config.get("google").get("MOVE_DIR_ID")
 GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
 table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 
-MAIL_TEMPLATE = config.get("mail_template")
+SCRIPT_CONFIG = config.get("generate_quotes")
 
 
 @dataclass
@@ -275,7 +275,7 @@ def main(dry_run):
 
         # メール生成のテンプレは別のファイルに書く。
         # 納期はグループ内最初のQuoteItemのものを利用（案件に対して同じ納期を設定している前提）
-        mail_template_body: str = config.get("mail_template").get("body")
+        mail_template_body: str = SCRIPT_CONFIG.get("mail_template_body")
         replybody = mail_template_body.replace("{{nouki}}", quote_items[0].duration_str)
 
         # メールのスレッドを取得して、スレッドに返信する

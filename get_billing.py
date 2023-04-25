@@ -20,6 +20,7 @@ START_DATE_FORMAT = "%Y-%m-%d"
 config = load_config.CONFIG
 MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
 QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
+SCRIPT_CONFIG = config.get("billing_quote")
 
 # 本日の日付を全体で使うためにここで宣言
 today_datetime = datetime.now()
@@ -107,7 +108,7 @@ def generate_billing_json_data(billing_data: BillingData) -> dict:
 
 
 # 見積書一覧を元にテンプレの行を生成
-def generate_invoice(mfcloud_invoice_session, billing_data_json_data):
+def generate_invoice(mfcloud_invoice_session, billing_data_json_data) -> Path:
     # 請求書を生成する
     generated_billing_res = mfcloud_invoice_session.post(
         f"{API_ENDPOINT}billings?excise_type=boolean",
@@ -138,6 +139,8 @@ def generate_invoice(mfcloud_invoice_session, billing_data_json_data):
         save_file.write(billing_pdf_binary)
         print(f"ファイルが生成されました。保存先:{save_filepath}")
 
+        return save_filepath
+
 
 def set_border_style(
     ws: openpyxl.worksheet.worksheet.Worksheet,
@@ -167,7 +170,7 @@ def set_border_style(
                 cell.number_format = '"\\"0'
 
 
-def export_list(billing_target_quotes: list[BillingTargetQuote]) -> None:
+def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
     """
     請求対象一覧をxlsxファイルに出力する
     """
@@ -198,7 +201,9 @@ def export_list(billing_target_quotes: list[BillingTargetQuote]) -> None:
     )
 
     # ファイルを保存する
-    wb.save(Path("./billing") / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx")
+    save_filrpath = Path("./billing") / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
+    wb.save(save_filrpath)
+    return save_filrpath
 
 
 # メール下書きを作成する
@@ -207,29 +212,12 @@ def set_draft_mail(attchment_filepath: Path) -> None:
     タイトルと本文を入力してメール下書きを作成する
     タイトルの例 "2023年03月請求書送付について"
     """
-
-    mailbody = f"""\株式会社 ミスミ
-金型事業部
-渡邊様
-
-佐野設計です。いつもお世話になっております。
-
-以下の納品致しました案件の請求書を送付致します。
-お手数お掛けしますがご確認お願い致します。
-請求内容につきましては別添付のExcelファイルを参照ください。
-
-以上です。よろしくお願いいたします。
-
-====================
-株式会社佐野設計事務所
-佐野　浩士
-email : hiroshi.sano@sano-design.info
-Webサイト : http://sano-design.info/
-TEL : 0545-55-1166
-====================
-"""
     # タイトルは日付が入ったもの。例:2023年03月請求書送付について
-    mailtitle = f"{today_datetime:%Y年%m月}請求書送付について"
+    mailtitle = SCRIPT_CONFIG.get("mail_template_body").replace(
+        "{{datetime}}", f"{today_datetime:%Y年%m月}"
+    )
+
+    mailbody = SCRIPT_CONFIG.get("mail_template_body")
 
     # メール下書きを作成する
     gmail_service = build("gmail", "v1", credentials=google_api_helper.creds)
@@ -240,8 +228,6 @@ TEL : 0545-55-1166
 
 
 def main():
-    # TODO:2022-11-22 今月の請求書で合計額の請求書作成とExcelのテンプレを用意して一覧を作る
-
     # mfcloudのセッション作成
     mfci_cred = MFCICledential()
     mfcloud_invoice_session = mfci_cred.get_session()
@@ -352,12 +338,19 @@ def main():
     match output_select:
         case "check" | "c":
             # 見積書の一覧だけ作る
-            export_list(filterd_billing_target_quote_list)
-            print("一覧のみ生成しました")
+            export_xlsx_path = export_list(filterd_billing_target_quote_list)
+            print(f"一覧のみ生成しました。\nファイルパス:{export_xlsx_path}")
+
         case "output" | "o":
-            export_list(filterd_billing_target_quote_list)
-            generate_invoice(mfcloud_invoice_session, billing_data_json_data)
+            export_xlsx_path = export_list(filterd_billing_target_quote_list)
+            billing_pdf_path = generate_invoice(
+                mfcloud_invoice_session, billing_data_json_data
+            )
             print("一覧と請求書生成しました")
+            print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
+
+            set_draft_mail((export_xlsx_path, billing_pdf_path))
+            print("メールの下書きを作成しました")
         case _:
             print("キャンセルしました")
 
