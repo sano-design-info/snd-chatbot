@@ -139,6 +139,7 @@ def get_messages_by_threadid(service, thread_id) -> list[dict]:
 def create_message(
     sender: str,
     to: str,
+    cc: str,
     reply_to: str,
     subject: str,
     message_text: str,
@@ -158,8 +159,9 @@ def create_message(
     message = EmailMessage()
     message["to"] = to
     message["from"] = sender
-    message["subject"] = subject
+    message["cc"] = cc
     message["reply-to"] = reply_to
+    message["subject"] = subject
     message["references"] = reply_to
 
     # ここではtext/plainのみ対応
@@ -216,6 +218,7 @@ def create_reply_message(
     mime_message = create_message(
         org_messageitem.to_address,
         org_messageitem.from_address,
+        org_messageitem.cc_address,
         message_id,
         org_messageitem.subject,
         reply_body,

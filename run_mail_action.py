@@ -72,7 +72,7 @@ def main() -> None:
         thread_results = (
             service.users()
             .threads()
-            .list(userId=target_userid, q="label:snd-ミスミ subject:(*MA-*)")
+            .list(userId=target_userid, q="label:snd-ミスミ (*MA-*)")
             .execute()
         )
         threads = thread_results.get("threads", [])

@@ -279,7 +279,7 @@ def main(dry_run):
         replybody = mail_template_body.replace("{{nouki}}", quote_items[0].duration_str)
 
         # メールのスレッドを取得して、スレッドに返信する
-        searchquery = f"label:snd-ミスミ subject:(*{group_key}*)"
+        searchquery = f"label:snd-ミスミ (*{group_key}*)"
 
         threads = google_api_helper.search_threads(gmail_service, searchquery)
         if not threads:

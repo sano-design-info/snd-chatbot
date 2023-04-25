@@ -91,19 +91,17 @@ class ExpandedMessageItem:
             "value"
         )
         self.subject = self.title
-
         self.from_address = next(
             (i for i in self.headers if i.get("name") == "From")
         ).get("value")
 
-        self.to_address = next((i for i in self.headers if i.get("name") == "To")).get(
-            "value"
+        # toとccは複数アドレスがあるので、",でjoinする
+        self.to_address = ",".join(
+            (i.get("value", "") for i in self.headers if i.get("name") == "To")
         )
-
-        # CCのアドレスがある場合は、CCのアドレスを取得する。無い場合は空文字を入れる
-        self.cc_address = next(
-            (i for i in self.headers if i.get("name") == "CC"), {}
-        ).get("value", "")
+        self.cc_address = ",".join(
+            (i.get("value", "") for i in self.headers if i.get("name") == "Cc")
+        )
 
         self.datetime_ = convert_gmail_datetimestr(
             next((i for i in self.headers if i.get("name") == "Date")).get("value")

@@ -187,7 +187,7 @@ class EstimateCalcSheetInfo:
                         )
                     # gsheetで取り込んだ結果が数字になってしまう...
                     self.duration = fix_datetime(self.duration)
-                    self.duration_str = self.duration.strftime("%Y/%m/%d")
+                    self.duration_str = self.duration.strftime("%m/%d")
                     self.price = re.sub(r"[\¥\,]", "", self.price)
 
                 except HttpError as error:
