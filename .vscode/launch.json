@@ -14,10 +14,10 @@
             "justMyCode": true
         },
         {
-            "name": "Python: generate_quote",
+            "name": "Python: generate_quotes",
             "type": "python",
             "request": "launch",
-            "program": "generate_quote.py",
+            "program": "generate_quotes.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }

@@ -187,7 +187,11 @@ def create_message(
 
 # 返信用のメッセージ生成
 def create_reply_message(
-    service, body: str, attachment_files: list[Path], message_id: str, thread_id: str
+    service,
+    body: str,
+    attachment_files: list[Path],
+    message_id: str,
+    thread_id: str | None = None,
 ) -> dict:
     """
     Gmail APIを使用して、返信用のメッセージを生成します。メッセージはテキストモードで生成されます
@@ -225,7 +229,10 @@ def create_reply_message(
         attachment_files,
     )
     # 返信用にスレッドIDを指定
-    return {"raw": mime_message, "threadId": thread_id}
+    if thread_id:
+        return {"raw": mime_message, "threadId": thread_id}
+    else:
+        return {"raw": mime_message}
 
 
 # Gmail APIで下書きメールを作成してスレッドにつける
@@ -242,6 +249,7 @@ def append_draft_message(
         service: Gmail APIのサービス
         body: メッセージ本文
         message_id: メッセージID
+        thread_id: スレッドID
     return:
         作成した下書きメールの情報
     """

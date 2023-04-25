@@ -6,7 +6,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from helper import load_config
+import openpyxl
+from googleapiclient.discovery import build
+from openpyxl.styles import Border, Side
+
+from helper import api_scopes, google_api_helper, load_config
 from helper.mfcloud_api import API_ENDPOINT, MFCICledential, get_quote_list
 
 # `2020-01-01` のフォーマットのみ受け付ける
@@ -102,22 +106,6 @@ def generate_billing_json_data(billing_data: BillingData) -> dict:
     return billing_data_json
 
 
-# TODO:2022-11-25 csvファイルで一覧を出す
-def export_list(filterd_billing_target_quote_list):
-    import csv
-
-    csv_fieldnames = asdict(filterd_billing_target_quote_list[0]).keys()
-    save_csvfilepath = Path("./billing") / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.csv"
-    with save_csvfilepath.open("w", encoding="cp932", newline="") as save_csvfile:
-        writer = csv.DictWriter(
-            save_csvfile, fieldnames=tuple(csv_fieldnames), dialect="excel"
-        )
-        writer.writeheader()
-        writer.writerows((asdict(i) for i in filterd_billing_target_quote_list))
-
-
-# Excelテンプレをロード
-
 # 見積書一覧を元にテンプレの行を生成
 def generate_invoice(mfcloud_invoice_session, billing_data_json_data):
     # 請求書を生成する
@@ -151,8 +139,107 @@ def generate_invoice(mfcloud_invoice_session, billing_data_json_data):
         print(f"ファイルが生成されました。保存先:{save_filepath}")
 
 
-def main():
+def set_border_style(
+    ws: openpyxl.worksheet.worksheet.Worksheet,
+    num_rows: int,
+    column_nums: list[int],
+    start_num_row: int = 1,
+):
+    """
+    ワークシートに罫線を入れる。
+    """
 
+    # 罫線の設定
+    border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
+    # B6からD6までのセルに上下左右に罫線をいれる
+    for row in range(start_num_row, num_rows + start_num_row):
+        for col in column_nums:
+            cell = ws.cell(row=row, column=col)
+            cell.border = border
+            # D6の表示形式を日本円の通貨表記にする
+            if col == 4:
+                cell.number_format = '"\\"0'
+
+
+def export_list(billing_target_quotes: list[BillingTargetQuote]) -> None:
+    """
+    請求対象一覧をxlsxファイルに出力する
+    """
+    # テンプレートの形式に沿った数字の設定
+    row_start = 6
+    column_fieldmap = {
+        "型式": 2,
+        "納期": 3,
+        "金額:税抜き": 4,
+    }
+
+    wb = openpyxl.load_workbook("./post_process/billing_list_template.xlsx")
+    ws = wb.active
+
+    # A1セルに"2023年**月請求一覧"と入れる。**は今月の月
+    ws["A1"] = f"{today_datetime:%Y年%m月}請求一覧"
+    # D1セルには今日の日付を入れる。フォーマットは"2023年4月26日" f-stringで入れる。
+    ws["D1"] = f"{today_datetime:%Y年%m月%d日}"
+
+    # 6行目からデータを入れる。
+    for row, quote in enumerate(billing_target_quotes, start=row_start):
+        for key, col in column_fieldmap.items():
+            ws.cell(row=row, column=col).value = getattr(quote, key)
+
+    # 罫線を入れる。set_border_styleを使う
+    set_border_style(
+        ws, len(billing_target_quotes), column_fieldmap.values(), row_start
+    )
+
+    # ファイルを保存する
+    wb.save(Path("./billing") / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx")
+
+
+# メール下書きを作成する
+def set_draft_mail(attchment_filepath: Path) -> None:
+    """
+    タイトルと本文を入力してメール下書きを作成する
+    タイトルの例 "2023年03月請求書送付について"
+    """
+
+    mailbody = f"""\株式会社 ミスミ
+金型事業部
+渡邊様
+
+佐野設計です。いつもお世話になっております。
+
+以下の納品致しました案件の請求書を送付致します。
+お手数お掛けしますがご確認お願い致します。
+請求内容につきましては別添付のExcelファイルを参照ください。
+
+以上です。よろしくお願いいたします。
+
+====================
+株式会社佐野設計事務所
+佐野　浩士
+email : hiroshi.sano@sano-design.info
+Webサイト : http://sano-design.info/
+TEL : 0545-55-1166
+====================
+"""
+    # タイトルは日付が入ったもの。例:2023年03月請求書送付について
+    mailtitle = f"{today_datetime:%Y年%m月}請求書送付について"
+
+    # メール下書きを作成する
+    gmail_service = build("gmail", "v1", credentials=google_api_helper.creds)
+
+    google_api_helper.append_draft_message(
+        gmail_service, mailtitle, mailbody, [attchment_filepath]
+    )
+
+
+def main():
     # TODO:2022-11-22 今月の請求書で合計額の請求書作成とExcelのテンプレを用意して一覧を作る
 
     # mfcloudのセッション作成

@@ -157,7 +157,6 @@ token.json
 exam
 export_files
 .DS_Store
-.vscode
 access_token.dat
 quote/
 billing/
