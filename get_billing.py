@@ -20,7 +20,8 @@ START_DATE_FORMAT = "%Y-%m-%d"
 config = load_config.CONFIG
 MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
 QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
-SCRIPT_CONFIG = config.get("billing_quote")
+SCRIPT_CONFIG = config.get("get_billing")
+
 
 # 本日の日付を全体で使うためにここで宣言
 today_datetime = datetime.now()
@@ -167,7 +168,7 @@ def set_border_style(
             cell.border = border
             # D6の表示形式を日本円の通貨表記にする
             if col == 4:
-                cell.number_format = '"\\"0'
+                cell.number_format = "[$¥-ja-JP]#,##0;-[$¥-ja-JP]#,##0"
 
 
 def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
@@ -176,17 +177,18 @@ def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
     """
     # テンプレートの形式に沿った数字の設定
     row_start = 6
+    # BillingTargetQuoteの構造に従ったマップ
     column_fieldmap = {
-        "型式": 2,
-        "納期": 3,
-        "金額:税抜き": 4,
+        "only_katasiki": 2,
+        "durarion": 3,
+        "price": 4,
     }
 
     wb = openpyxl.load_workbook("./post_process/billing_list_template.xlsx")
     ws = wb.active
 
     # A1セルに"2023年**月請求一覧"と入れる。**は今月の月
-    ws["A1"] = f"{today_datetime:%Y年%m月}請求一覧"
+    ws["B1"] = f"{today_datetime:%Y年%m月}請求一覧"
     # D1セルには今日の日付を入れる。フォーマットは"2023年4月26日" f-stringで入れる。
     ws["D1"] = f"{today_datetime:%Y年%m月%d日}"
 
@@ -207,23 +209,28 @@ def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
 
 
 # メール下書きを作成する
-def set_draft_mail(attchment_filepath: Path) -> None:
+def set_draft_mail(attchment_filepaths: list[Path]) -> None:
     """
     タイトルと本文を入力してメール下書きを作成する
     タイトルの例 "2023年03月請求書送付について"
     """
     # タイトルは日付が入ったもの。例:2023年03月請求書送付について
-    mailtitle = SCRIPT_CONFIG.get("mail_template_body").replace(
+    mailtitle = SCRIPT_CONFIG.get("mail_template_title").replace(
         "{{datetime}}", f"{today_datetime:%Y年%m月}"
     )
 
     mailbody = SCRIPT_CONFIG.get("mail_template_body")
+    mailto = SCRIPT_CONFIG.get("mail_to")
+    mailcc = SCRIPT_CONFIG.get("mail_cc", "")
 
     # メール下書きを作成する
-    gmail_service = build("gmail", "v1", credentials=google_api_helper.creds)
 
-    google_api_helper.append_draft_message(
-        gmail_service, mailtitle, mailbody, [attchment_filepath]
+    google_cred = google_api_helper.get_cledential(api_scopes.GOOGLE_API_SCOPES)
+
+    gmail_service = build("gmail", "v1", credentials=google_cred)
+
+    google_api_helper.append_draft(
+        gmail_service, mailto, mailcc, mailtitle, mailbody, attchment_filepaths
     )
 
 
@@ -349,7 +356,7 @@ def main():
             print("一覧と請求書生成しました")
             print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
 
-            set_draft_mail((export_xlsx_path, billing_pdf_path))
+            set_draft_mail([export_xlsx_path, billing_pdf_path])
             print("メールの下書きを作成しました")
         case _:
             print("キャンセルしました")

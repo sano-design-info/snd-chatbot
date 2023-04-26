@@ -136,7 +136,7 @@ def get_messages_by_threadid(service, thread_id) -> list[dict]:
         return []
 
 
-def create_message(
+def create_messagedata(
     sender: str,
     to: str,
     cc: str,
@@ -186,11 +186,11 @@ def create_message(
 
 
 # 返信用のメッセージ生成
-def create_reply_message(
+def create_reply_gmail_messagedata(
     service,
     body: str,
-    attachment_files: list[Path],
     message_id: str,
+    attachment_files: list[Path] | None = None,
     thread_id: str | None = None,
 ) -> dict:
     """
@@ -203,7 +203,7 @@ def create_reply_message(
         message_id: メッセージID
         thread_id: スレッドID
     return:
-        返信用のメッセージ
+        返信メッセージ用のデータ。Gmail API向けrawメッセージ
     """
     # 元のメッセージからヘッダー情報を取得
     org_message = service.users().messages().get(userId="me", id=message_id).execute()
@@ -219,7 +219,7 @@ def create_reply_message(
     reply_body = f"{body}\n{reply_info}\n{quoted_body}"
 
     # 返信メッセージを作成
-    mime_message = create_message(
+    mime_message = create_messagedata(
         org_messageitem.to_address,
         org_messageitem.from_address,
         org_messageitem.cc_address,
@@ -235,8 +235,48 @@ def create_reply_message(
         return {"raw": mime_message}
 
 
+# 新規のGmail APIの rawメッセージを作成
+def create_blank_gmail_messagedata(
+    service,
+    to: str,
+    cc: str,
+    subject: str,
+    body: str,
+    attachment_files: list[Path] | None = None,
+) -> dict:
+    """
+    Gmail APIを使用して、新規のGmail APIの rawメッセージを作成します。
+    args:
+        service: Gmail APIのサービス
+        to: 宛先
+        cc: CC
+        subject: 件名
+        body: 本文
+        attachment_files: 添付ファイルのリスト
+    return:
+        新規メッセージ用のデータ。Gmail API向けrawメッセージ
+    """
+    try:
+        # 送信者のメールアドレスを取得
+        sender = service.users().getProfile(userId="me").execute()["emailAddress"]
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        return {}
+
+    mime_message = create_messagedata(
+        sender,
+        to,
+        cc,
+        sender,
+        subject,
+        body,
+        attachment_files,
+    )
+    return {"raw": mime_message}
+
+
 # Gmail APIで下書きメールを作成してスレッドにつける
-def append_draft_message(
+def append_draft_in_thread(
     service,
     body: str,
     attachment_files: list[Path],
@@ -260,14 +300,58 @@ def append_draft_message(
             .create(
                 userId="me",
                 body={
-                    "message": create_reply_message(
-                        service, body, attachment_files, message_id, thread_id
+                    "message": create_reply_gmail_messagedata(
+                        service, body, message_id, attachment_files, thread_id
                     )
                 },
             )
             .execute()
         )
 
+        print(f'Saved draft: Draft Id: {draft["id"]}')
+
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        draft = None
+
+    return draft
+
+
+# メールの下書き新規作成用
+def append_draft(
+    service, to: str, cc: str, title: str, body: str, attachment_files: list[Path]
+) -> dict | None:
+    """
+    Gmail APIを使用して、下書きメールを作成します。
+    args:
+        service: Gmail APIのサービス
+        to: 宛先
+        cc: CC
+        title: 件名
+        body: 本文
+        attachment_files: 添付ファイルのリスト
+    return:
+        作成した下書きメールの情報
+    """
+    try:
+        draft = (
+            service.users()
+            .drafts()
+            .create(
+                userId="me",
+                body={
+                    "message": create_blank_gmail_messagedata(
+                        service,
+                        to,
+                        cc,
+                        title,
+                        body,
+                        attachment_files,
+                    )
+                },
+            )
+            .execute()
+        )
         print(f'Saved draft: Draft Id: {draft["id"]}')
 
     except HttpError as error:

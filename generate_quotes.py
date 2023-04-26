@@ -293,7 +293,7 @@ def main(dry_run):
 
         # 返信メッセージで下書きを生成
         print(
-            google_api_helper.append_draft_message(
+            google_api_helper.append_draft_in_thread(
                 gmail_service,
                 replybody,
                 (quote_item.estimate_pdf_path for quote_item in quote_items),
