@@ -96,12 +96,13 @@ def main() -> None:
                     .get(userId=target_userid, id=message_id, fields="messages")
                 ).execute()
 
-                message_result = (
-                    service.users().messages().get(userId=target_userid, id=message_id)
-                ).execute()
-
                 if len(thread_result.get("messages")) <= 2:
-                    messages.append(ExpandedMessageItem(gmail_message=message_result))
+                    # スレッドの一番先頭にあるメッセージを取得する
+                    messages.append(
+                        ExpandedMessageItem(
+                            gmail_message=thread_result.get("messages")[0]
+                        )
+                    )
 
     except HttpError as error:
         # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
