@@ -13,7 +13,7 @@ import questionary
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from helper import api_scopes, google_api_helper, load_config, regexpatterns
+from helper import api_scopes, google_api_helper, load_config
 from helper.mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
 from post_process import (
     EstimateCalcSheetInfo,
@@ -27,7 +27,7 @@ from post_process import (
 # 2020-01-01 のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
 GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
-MISTUMORI_NUMBER_PATTERN = re.compile("^.*_MA-(?P<number>.*)")
+
 # TODO:2023-03-28 これはもう使わないはずなので削除する。issue作ること
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
 

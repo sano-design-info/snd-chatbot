@@ -17,7 +17,7 @@ config = load_config.CONFIG
 table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
 
-
+# Excel, Gsheetのセルアドレスのパターン。"sheetname!A1"の形式でマッチする。
 range_addr_pattern = re.compile(
     r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
 )
