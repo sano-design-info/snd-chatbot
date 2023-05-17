@@ -281,7 +281,6 @@ def generate_pdf_by_renrakukoumoku_excel(
 
 
 def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
-
     export_project_dir = export_dirpath / "proj_dir"
     export_project_dir.mkdir(exist_ok=True)
 
@@ -296,7 +295,6 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
     # ボイラープレートからディレクトリ生成
     boilerplate_config = {
         "project_name": msm_katasiki_num,
-        "haikan_pattern": "type_s",
     }
     generated_copier_worker = copier.run_copy(
         msm_gas_boilerplate_url,
@@ -389,7 +387,6 @@ def add_schedule_spreadsheet(
 def generate_estimate_calcsheet(
     attachment_dirpath: Path, google_cred: Credentials
 ) -> None:
-
     # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
     # TODO:2022-12-15 ここは情緒なんだけど外に出す必要性があんまりないので今はそのまま。
 
