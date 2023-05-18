@@ -87,24 +87,34 @@ class ExpandedMessageItem:
         self.headers = self.payload.get("headers")
 
         self.id = self.gmail_message.get("id")
-        self.title = next((i for i in self.headers if i.get("name") == "Subject")).get(
-            "value"
-        )
+        self.title = next(
+            (i for i in self.headers if i.get("name").lower() == "Subject".lower())
+        ).get("value")
         self.subject = self.title
         self.from_address = next(
-            (i for i in self.headers if i.get("name") == "From")
+            (i for i in self.headers if i.get("name").lower() == "From".lower())
         ).get("value")
 
         # toとccは複数アドレスがあるので、",でjoinする
         self.to_address = ",".join(
-            (i.get("value", "") for i in self.headers if i.get("name") == "To")
+            (
+                i.get("value", "")
+                for i in self.headers
+                if i.get("name").lower() == "To".lower()
+            )
         )
         self.cc_address = ",".join(
-            (i.get("value", "") for i in self.headers if i.get("name") == "Cc")
+            (
+                i.get("value", "")
+                for i in self.headers
+                if i.get("name").lower() == "Cc".lower()
+            )
         )
 
         self.datetime_ = convert_gmail_datetimestr(
-            next((i for i in self.headers if i.get("name") == "Date")).get("value")
+            next(
+                (i for i in self.headers if i.get("name").lower() == "Date".lower())
+            ).get("value")
         )
 
         # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
