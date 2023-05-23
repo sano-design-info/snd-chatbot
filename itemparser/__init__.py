@@ -406,6 +406,7 @@ class MsmAnkenMapList:
         return pandas.DataFrame(sheet_table).set_index(["msmankennumber"]).fillna("")
 
 
+# TODO:2023-05-23 スケジュール表更新用の関数は別のファイルに移動するほうが良い。
 def get_schedule_table_area(
     search_range: str, google_cred
 ) -> tuple[str, pandas.DataFrame]:
