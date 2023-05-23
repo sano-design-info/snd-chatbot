@@ -9,7 +9,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from api import googleapi
-from prepare import (
+from itemparser import (
     ExpandedMessageItem,
     add_schedule_spreadsheet,
     copy_projectdir,

@@ -12,7 +12,7 @@ from googleapiclient.errors import HttpError
 
 # load config
 from helper import load_config
-from prepare import ExpandedMessageItem
+from itemparser import ExpandedMessageItem
 
 config = load_config.CONFIG
 cred_filepath = config.get("google").get("CRED_FILEPATH")
