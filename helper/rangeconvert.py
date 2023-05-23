@@ -37,9 +37,3 @@ def rowcol_to_a1(row: int, col: int) -> str:
     label = "{}{}".format(column_label, row)
 
     return label
-
-
-def a1_to_rowcol(a1_str: str) -> tuple[int, int]:
-    """まだ未実装です
-    convert A1 -> (1,1)"""
-    return (0, 0)
