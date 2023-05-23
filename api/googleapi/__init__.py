@@ -12,15 +12,25 @@ from googleapiclient.errors import HttpError
 
 # load config
 from helper import load_config
-from prepare import ExpandedMessageItem
+from itemparser import ExpandedMessageItem
 
 config = load_config.CONFIG
 cred_filepath = config.get("google").get("CRED_FILEPATH")
 
 # generate Path
-parent_dirpath = Path(__file__).parents[1]
+parent_dirpath = Path(__file__).parents[2]
 token_save_path = parent_dirpath / "token.json"
 cred_json = parent_dirpath / cred_filepath
+
+API_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.appdata",
+    "https://www.googleapis.com/auth/drive.metadata",
+]
 
 
 def get_cledential(scopes: list[str]) -> Credentials:
@@ -28,12 +38,10 @@ def get_cledential(scopes: list[str]) -> Credentials:
     Google APIの認証情報を取得します。
     既に認証情報があればそれを返します。
     なければ認証情報を取得し、token.jsonに保存します。
-
     args:
         scopes: 認証情報を取得する際に必要なスコープ
     return:
         認証情報
-
     """
     creds = None
     if token_save_path.exists():

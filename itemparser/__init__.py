@@ -1,20 +1,23 @@
-from datetime import datetime
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
+import dateutil.parser
+import dateutil.tz
 import openpyxl
 import pandas
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from helper import api_scopes, google_api_helper, load_config, rangeconvert
+from api import googleapi
+from helper import decode_base64url, load_config, rangeconvert
 from helper.regexpatterns import MSM_ANKEN_NUMBER
 
+# load config
 config = load_config.CONFIG
-table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
 
 # Excel, Gsheetのセルアドレスのパターン。"sheetname!A1"の形式でマッチする。
@@ -22,18 +25,123 @@ range_addr_pattern = re.compile(
     r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
 )
 
-google_cred: Credentials = google_api_helper.get_cledential(
-    api_scopes.GOOGLE_API_SCOPES
-)
+google_cred: Credentials = googleapi.get_cledential(googleapi.API_SCOPES)
 
 
-def fix_datetime(datetime_str: str) -> datetime:
-    """
-    日付の入力の区切り文字を修正する。
-    """
-    for splitecahr in (".", "/"):
-        if splitecahr in datetime_str:
-            return datetime.strptime(datetime_str, splitecahr.join(("%Y", "%m", "%d")))
+def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
+    persed_time = dateutil.parser.parse(gmail_datetimeformat)
+    return persed_time.astimezone(dateutil.tz.gettz("Asia/Tokyo"))
+
+
+@dataclass
+class ExpandedMessageItem:
+    "メッセージ一覧の選択や、メール回りで使うときに利用する"
+    gmail_message: dict
+    payload: dict = field(init=False)
+    headers: dict = field(init=False)
+
+    id: str = field(init=False)
+    title: str = field(init=False)
+    subject: str = field(init=False)
+    from_address: str = field(init=False)
+    to_address: str = field(init=False)
+    cc_address: str = field(init=False)
+    datetime_: datetime = field(init=False)
+    body_related: dict = field(init=False)
+    body_parts: dict = field(init=False)
+    body: str = field(init=False)
+
+    def __post_init__(self):
+        self.payload = self.gmail_message.get("payload")
+        self.headers = self.payload.get("headers")
+
+        self.id = self.gmail_message.get("id")
+        self.title = next(
+            (i for i in self.headers if i.get("name").lower() == "Subject".lower())
+        ).get("value")
+        self.subject = self.title
+        self.from_address = next(
+            (i for i in self.headers if i.get("name").lower() == "From".lower())
+        ).get("value")
+
+        # toとccは複数アドレスがあるので、",でjoinする
+        self.to_address = ",".join(
+            (
+                i.get("value", "")
+                for i in self.headers
+                if i.get("name").lower() == "To".lower()
+            )
+        )
+        self.cc_address = ",".join(
+            (
+                i.get("value", "")
+                for i in self.headers
+                if i.get("name").lower() == "Cc".lower()
+            )
+        )
+
+        self.datetime_ = convert_gmail_datetimestr(
+            next(
+                (i for i in self.headers if i.get("name").lower() == "Date".lower())
+            ).get("value")
+        )
+
+        # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
+        # メールがリッチテキストかつimgファイルがある場合は、multipart/relatedとなり、body_relatedを入れるとimgファイル収集も可能なので、別で用意している
+        self.body_related = {}
+
+        # ここはtext plane or multipart/altanative or multipart/related >  multipart/altanative の構造になってるらしいので、分離した処理に切り替えないといけない
+
+        # partsがない場合 = シンプルなテキストベースの場合
+        if not self.payload.get("parts"):
+            self.body_parts = [self.payload]
+        else:
+            # リッチテキスト系の場合
+            mail_part_mimetype = next(
+                i.get("mimeType")
+                for i in self.payload.get("parts")
+                if i.get("partId") in ("0")
+            )
+
+            match mail_part_mimetype:
+                case "text/plain":
+                    self.body_parts = self.payload.get("parts")
+                case "multipart/alternative":
+                    self.body_parts = next(
+                        (
+                            i
+                            for i in self.payload.get("parts")
+                            if i.get("mimeType") == "multipart/alternative"
+                        ),
+                        {},
+                    ).get("parts")
+                case "multipart/related":
+                    self.body_related = next(
+                        (
+                            i
+                            for i in self.payload.get("parts")
+                            if i.get("mimeType") == "multipart/related"
+                        )
+                    )
+                    self.body_parts = next(
+                        (
+                            i
+                            for i in self.body_related.get("parts")
+                            if i.get("mimeType") == "multipart/alternative"
+                        )
+                    ).get("parts")
+                case _:
+                    pass
+
+        # body_partsからbodyを取得する
+        mailbody = next(
+            (
+                i["body"]["data"]
+                for i in self.body_parts
+                if "text/plain" in i.get("mimeType")
+            )
+        )
+        self.body = decode_base64url(mailbody).decode("utf8")
 
 
 @dataclass
@@ -106,7 +214,6 @@ class CsvFileInfo:
 # TODO:2023-01-12 ここではまだ一括で登録をする作業はできないので、gsheet利用優先で実装中
 @dataclass
 class EstimateCalcSheetInfo:
-
     # gsheet_url | openpyxl.ws を受け取るような仕様にする。
     calcsheet_source: str | Path
     anken_number: str = field(init=False)
@@ -123,7 +230,6 @@ class EstimateCalcSheetInfo:
             # excel形式: Pathを指定する
             case Path():
                 if self.calcsheet_source.suffix == ".xlsx":
-
                     pass
                 pass
             # gsheet形式: IDの羅列なのでIDが利用できるかはAPIに問い合わせる
@@ -186,7 +292,7 @@ class EstimateCalcSheetInfo:
                             str(res_value.get("values")[0][0]),
                         )
                     # gsheetで取り込んだ結果が数字になってしまう...
-                    self.duration = fix_datetime(self.duration)
+                    self.duration = self.fix_datetime(self.duration)
                     self.duration_str = self.duration.strftime("%m/%d")
                     self.price = re.sub(r"[\¥\,]", "", self.price)
 
@@ -199,6 +305,16 @@ class EstimateCalcSheetInfo:
             case _:
                 raise ValueError(
                     f"This source is cant use class:{self.calcsheet_source}"
+                )
+
+    def fix_datetime(datetime_str: str) -> datetime:
+        """
+        日付の入力の区切り文字を修正する。
+        """
+        for splitecahr in (".", "/"):
+            if splitecahr in datetime_str:
+                return datetime.strptime(
+                    datetime_str, splitecahr.join(("%Y", "%m", "%d"))
                 )
 
 
@@ -233,7 +349,6 @@ class MsmAnkenMap:
     # 書くデータのクラスを取り込む関数（set_***）
     # setしたときにanken_base_numberが同じかをチェック
     def set_renrakukoumoku_info(self, renrakukoumoku_info: RenrakukoumokuInfo):
-
         if (
             renrakukoumoku_info.anken_base_number
             == self.select_anken_ref().anken_base_number
@@ -243,7 +358,6 @@ class MsmAnkenMap:
 
 @dataclass
 class MsmAnkenMapList:
-
     msmankenmap_list: list[MsmAnkenMap] = field(default_factory=list)
 
     # 名寄せ用のマップ
@@ -291,10 +405,10 @@ class MsmAnkenMapList:
         return pandas.DataFrame(sheet_table).set_index(["msmankennumber"]).fillna("")
 
 
+# TODO:2023-05-23 スケジュール表更新用の関数は別のファイルに移動するほうが良い。
 def get_schedule_table_area(
     search_range: str, google_cred
 ) -> tuple[str, pandas.DataFrame]:
-
     # 更新対称のセル範囲から値を取得
     try:
         append_values = [
@@ -352,7 +466,8 @@ def generate_update_valueranges(
     """
     oldとnewの表をみて、old側で更新するべきセルのアドレスと値を収集する
     結果はGoogle Sheet APIで受け取れるValueRangeとする
-    # https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values#ValueRange
+
+    ref: https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values#ValueRange
 
     search_range ="'sheet1'!A5:Q5"
     [{"rangeaddr": "value"}, ...]
@@ -398,7 +513,6 @@ def update_schedule_sheet(update_data: list[dict], google_cred):
 
     sheet_service = build("sheets", "v4", credentials=google_cred)
     try:
-
         update_gsheet_res = (
             sheet_service.spreadsheets()
             .values()
