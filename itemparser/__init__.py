@@ -466,7 +466,9 @@ def generate_update_valueranges(
     """
     oldとnewの表をみて、old側で更新するべきセルのアドレスと値を収集する
     結果はGoogle Sheet APIで受け取れるValueRangeとする
-    # https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values#ValueRange
+
+    ref: https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values#ValueRange
+
     search_range ="'sheet1'!A5:Q5"
     [{"rangeaddr": "value"}, ...]
     """
