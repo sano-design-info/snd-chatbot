@@ -9,8 +9,9 @@ import pandas
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from api import googleapi
 
-from helper import api_scopes, google_api_helper, load_config, rangeconvert
+from helper import load_config, rangeconvert
 from helper.regexpatterns import MSM_ANKEN_NUMBER
 
 config = load_config.CONFIG
@@ -22,9 +23,7 @@ range_addr_pattern = re.compile(
     r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
 )
 
-google_cred: Credentials = google_api_helper.get_cledential(
-    api_scopes.GOOGLE_API_SCOPES
-)
+google_cred: Credentials = googleapi.get_cledential(googleapi.API_SCOPES)
 
 
 def fix_datetime(datetime_str: str) -> datetime:
@@ -106,7 +105,6 @@ class CsvFileInfo:
 # TODO:2023-01-12 ここではまだ一括で登録をする作業はできないので、gsheet利用優先で実装中
 @dataclass
 class EstimateCalcSheetInfo:
-
     # gsheet_url | openpyxl.ws を受け取るような仕様にする。
     calcsheet_source: str | Path
     anken_number: str = field(init=False)
@@ -123,7 +121,6 @@ class EstimateCalcSheetInfo:
             # excel形式: Pathを指定する
             case Path():
                 if self.calcsheet_source.suffix == ".xlsx":
-
                     pass
                 pass
             # gsheet形式: IDの羅列なのでIDが利用できるかはAPIに問い合わせる
@@ -233,7 +230,6 @@ class MsmAnkenMap:
     # 書くデータのクラスを取り込む関数（set_***）
     # setしたときにanken_base_numberが同じかをチェック
     def set_renrakukoumoku_info(self, renrakukoumoku_info: RenrakukoumokuInfo):
-
         if (
             renrakukoumoku_info.anken_base_number
             == self.select_anken_ref().anken_base_number
@@ -243,7 +239,6 @@ class MsmAnkenMap:
 
 @dataclass
 class MsmAnkenMapList:
-
     msmankenmap_list: list[MsmAnkenMap] = field(default_factory=list)
 
     # 名寄せ用のマップ
@@ -294,7 +289,6 @@ class MsmAnkenMapList:
 def get_schedule_table_area(
     search_range: str, google_cred
 ) -> tuple[str, pandas.DataFrame]:
-
     # 更新対称のセル範囲から値を取得
     try:
         append_values = [
@@ -398,7 +392,6 @@ def update_schedule_sheet(update_data: list[dict], google_cred):
 
     sheet_service = build("sheets", "v4", credentials=google_cred)
     try:
-
         update_gsheet_res = (
             sheet_service.spreadsheets()
             .values()

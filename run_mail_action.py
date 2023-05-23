@@ -8,7 +8,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from helper import api_scopes, google_api_helper
+from api import googleapi
 from prepare import (
     ExpandedMessageItem,
     add_schedule_spreadsheet,
@@ -30,7 +30,7 @@ export_dirpath = (
 )
 attachment_dirpath = export_dirpath / "attachments"
 
-GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
+GOOGLE_API_SCOPES = googleapi.API_SCOPES
 
 
 def save_attachment_file(
@@ -58,10 +58,9 @@ def generate_dirs() -> None:
 
 
 def main() -> None:
-
     print("[Start Process...]")
 
-    google_cred: Credentials = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
+    google_cred: Credentials = googleapi.get_cledential(GOOGLE_API_SCOPES)
 
     messages: list[ExpandedMessageItem] = []
     try:
@@ -82,7 +81,6 @@ def main() -> None:
         if threads:
             top_threads = list(itertools.islice(threads, 0, 10))
             for thread in top_threads:
-
                 # threadsのid = threadsの一番最初のmessage>idなので、そのまま使う
                 message_id = thread.get("id", "")
                 # print(message_id)

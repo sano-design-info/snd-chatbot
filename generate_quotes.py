@@ -12,9 +12,10 @@ import click
 import questionary
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import api.googleapi
 
-from helper import api_scopes, google_api_helper, load_config
-from helper.mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
+from helper import load_config
+from api.mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
 from post_process import (
     EstimateCalcSheetInfo,
     MsmAnkenMap,
@@ -26,7 +27,7 @@ from post_process import (
 
 # 2020-01-01 のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
-GOOGLE_API_SCOPES = api_scopes.GOOGLE_API_SCOPES
+GOOGLE_API_SCOPES = api.googleapi.API_SCOPES
 
 # TODO:2023-03-28 これはもう使わないはずなので削除する。issue作ること
 API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
@@ -134,7 +135,7 @@ def main(dry_run):
     quote_items: list[QuoteItem] = []
 
     # Googleのtokenを用意
-    google_cred = google_api_helper.get_cledential(GOOGLE_API_SCOPES)
+    google_cred = api.googleapi.get_cledential(GOOGLE_API_SCOPES)
     gdrive_serivice = build("drive", "v3", credentials=google_cred)
     gmail_service = build("gmail", "v1", credentials=google_cred)
 
@@ -281,19 +282,19 @@ def main(dry_run):
         # メールのスレッドを取得して、スレッドに返信する
         searchquery = f"label:snd-ミスミ (*{group_key}*)"
 
-        threads = google_api_helper.search_threads(gmail_service, searchquery)
+        threads = api.googleapi.search_threads(gmail_service, searchquery)
         if not threads:
             sys.exit("スレッドが見つかりませんでした。メール返信作成を中止します。")
 
         # TODO:2023-04-18 ここは複数スレッドがあった場合は選択制にする。出ない場合は一番上のものを使いますと、タイトルを出して確認させる。
         # メッセージが大抵一つだが、一番上を取り出す（一番上が最新のはず）
-        message = google_api_helper.get_messages_by_threadid(
+        message = api.googleapi.get_messages_by_threadid(
             gmail_service, threads[0].get("id", "")
         )[0]
 
         # 返信メッセージで下書きを生成
         print(
-            google_api_helper.append_draft_in_thread(
+            api.googleapi.append_draft_in_thread(
                 gmail_service,
                 replybody,
                 (quote_item.estimate_pdf_path for quote_item in quote_items),
