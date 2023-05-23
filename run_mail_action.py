@@ -233,6 +233,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
     shutil.copytree(attachment_dirpath, (project_dir / "資料"), dirs_exist_ok=True)
 
 
+# TODO:2023-05-24 この関数はスケジュール表更新でも使うので、このスクリプトから独立させる予定
 def add_schedule_spreadsheet(
     attachment_dirpath: Path, google_cred: Credentials, nyukin_nextmonth: bool = False
 ) -> None:
@@ -308,7 +309,7 @@ def generate_estimate_calcsheet(
     attachment_dirpath: Path, google_cred: Credentials
 ) -> None:
     # 見積書生成機能をここで動かす。別のライブラリ化しておいて、それをここで呼び出すで良いと思う。
-    # TODO:2022-12-15 ここは情緒なんだけど外に出す必要性があんまりないので今はそのまま。
+    # TODO:2022-12-15 ここは冗長なんだけど外に出す必要性があんまりないので今はそのまま。
 
     target_filepath = next(attachment_dirpath.glob("*MA-*.xlsx"))
     if not target_filepath:
@@ -360,7 +361,6 @@ def copy_projectdir(export_path: Path) -> None:
         copy_project_dir_dest_path / export_prij_path.name,
         dirs_exist_ok=True,
     )
-    pass
 
 
 def main() -> None:
