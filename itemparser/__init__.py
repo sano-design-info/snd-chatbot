@@ -1,4 +1,3 @@
-import base64
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -16,16 +15,10 @@ from googleapiclient.errors import HttpError
 from api import googleapi
 from helper import load_config, rangeconvert
 from helper.regexpatterns import MSM_ANKEN_NUMBER
+from run_mail_action import decode_base64url
 
 # load config
-
 config = load_config.CONFIG
-estimate_template_gsheet_id = config.get("google").get("ESTIMATE_TEMPLATE_GSHEET_ID")
-schedule_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
-msm_gas_boilerplate_url = config.get("other").get("MSM_GAS_BOILERPLATE_URL")
-gsheet_tmmp_dir_ids = config.get("google").get("GSHEET_TMP_DIR_IDS")
-table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
-copy_project_dir_dest_path = Path(config.get("other").get("COPY_PROJECT_DIR_DEST_PATH"))
 update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
 
 # Excel, Gsheetのセルアドレスのパターン。"sheetname!A1"の形式でマッチする。
@@ -35,37 +28,10 @@ range_addr_pattern = re.compile(
 
 google_cred: Credentials = googleapi.get_cledential(googleapi.API_SCOPES)
 
-# Path
-parent_dirpath = Path(__file__).parents[1]
-
-
-def decode_base64url(s) -> bytes:
-    return base64.urlsafe_b64decode(s) + b"=" * (4 - (len(s) % 4))
-
-
-def encode_base64url(bytes_data) -> str:
-    return base64.urlsafe_b64encode(bytes_data).rstrip(b"=")
-
 
 def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
     persed_time = dateutil.parser.parse(gmail_datetimeformat)
     return persed_time.astimezone(dateutil.tz.gettz("Asia/Tokyo"))
-
-
-def pick_msm_katasiki_by_renrakukoumoku_filename(filepath: Path) -> str:
-    # 配管連絡項目から必要な情報を取り出して、スケジュール表を更新
-    # TODO:2022-12-14 ボイラープレートはExcelファイルのファイルパスから型式を取り出す
-
-    # ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
-    # 取得ができない場合は0000を用意
-    msm_katasiki_num = "0000"
-    if katasiki_matcher := re.match(
-        r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
-        str(filepath.name),
-    ):
-        msm_katasiki_num = katasiki_matcher.group(1)
-
-    return msm_katasiki_num
 
 
 @dataclass

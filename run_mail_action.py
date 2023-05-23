@@ -4,6 +4,7 @@ import io
 import itertools
 from datetime import datetime
 from pathlib import Path
+import re
 import shutil
 from bs4 import BeautifulSoup
 import copier
@@ -18,19 +19,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from api import googleapi
-from helper import extract_zip
-from itemparser import (
-    ExpandedMessageItem,
-    copy_project_dir_dest_path,
-    decode_base64url,
-    estimate_template_gsheet_id,
-    gsheet_tmmp_dir_ids,
-    msm_gas_boilerplate_url,
-    parent_dirpath,
-    pick_msm_katasiki_by_renrakukoumoku_filename,
-    schedule_sheet_id,
-    table_search_range,
-)
+from helper import extract_zip, load_config
+from itemparser import ExpandedMessageItem
 
 target_userid = "me"
 
@@ -44,6 +34,15 @@ export_dirpath = (
 attachment_dirpath = export_dirpath / "attachments"
 
 GOOGLE_API_SCOPES = googleapi.API_SCOPES
+
+# load config
+config = load_config.CONFIG
+gsheet_tmmp_dir_ids = config.get("google").get("GSHEET_TMP_DIR_IDS")
+msm_gas_boilerplate_url = config.get("other").get("MSM_GAS_BOILERPLATE_URL")
+schedule_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
+table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
+estimate_template_gsheet_id = config.get("google").get("ESTIMATE_TEMPLATE_GSHEET_ID")
+copy_project_dir_dest_path = Path(config.get("other").get("COPY_PROJECT_DIR_DEST_PATH"))
 
 
 def save_attachment_file(
@@ -68,6 +67,10 @@ def save_attachment_file(
 def generate_dirs() -> None:
     export_dirpath.mkdir(exist_ok=True, parents=True)
     attachment_dirpath.mkdir(exist_ok=True)
+
+
+def decode_base64url(s) -> bytes:
+    return base64.urlsafe_b64decode(s) + b"=" * (4 - (len(s) % 4))
 
 
 def generate_mail_printhtml(
@@ -183,6 +186,22 @@ def generate_pdf_by_renrakukoumoku_excel(
     except HttpError as error:
         # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
         print(f"An error occurred: {error}")
+
+
+def pick_msm_katasiki_by_renrakukoumoku_filename(filepath: Path) -> str:
+    # 配管連絡項目から必要な情報を取り出して、スケジュール表を更新
+    # TODO:2022-12-14 ボイラープレートはExcelファイルのファイルパスから型式を取り出す
+
+    # ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
+    # 取得ができない場合は0000を用意
+    msm_katasiki_num = "0000"
+    if katasiki_matcher := re.match(
+        r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
+        str(filepath.name),
+    ):
+        msm_katasiki_num = katasiki_matcher.group(1)
+
+    return msm_katasiki_num
 
 
 def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
