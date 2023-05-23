@@ -13,9 +13,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from api import googleapi
-from helper import load_config, rangeconvert
+from helper import decode_base64url, load_config, rangeconvert
 from helper.regexpatterns import MSM_ANKEN_NUMBER
-from run_mail_action import decode_base64url
 
 # load config
 config = load_config.CONFIG

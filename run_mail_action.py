@@ -2,24 +2,24 @@ import base64
 import html
 import io
 import itertools
-from datetime import datetime
-from pathlib import Path
 import re
 import shutil
-from bs4 import BeautifulSoup
-import copier
-from dateutil.relativedelta import relativedelta
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-from jinja2 import Environment, FileSystemLoader
-import openpyxl
+from datetime import datetime
+from pathlib import Path
 
+import copier
+import openpyxl
 import questionary
+from bs4 import BeautifulSoup
+from dateutil.relativedelta import relativedelta
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from jinja2 import Environment, FileSystemLoader
 
 from api import googleapi
-from helper import extract_zip, load_config
+from helper import decode_base64url, extract_zip, load_config
 from itemparser import ExpandedMessageItem
 
 target_userid = "me"
@@ -67,10 +67,6 @@ def save_attachment_file(
 def generate_dirs() -> None:
     export_dirpath.mkdir(exist_ok=True, parents=True)
     attachment_dirpath.mkdir(exist_ok=True)
-
-
-def decode_base64url(s) -> bytes:
-    return base64.urlsafe_b64decode(s) + b"=" * (4 - (len(s) % 4))
 
 
 def generate_mail_printhtml(
