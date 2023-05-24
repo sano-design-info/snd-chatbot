@@ -25,6 +25,7 @@ range_addr_pattern = re.compile(
     r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
 )
 
+# TODO:2023-05-24 このcredはgoogleapi.pyに移動するほうがいい? -> 循環importの解決には多分ならない（やってることが変わらない）
 google_cred: Credentials = googleapi.get_cledential(googleapi.API_SCOPES)
 
 
@@ -214,6 +215,9 @@ class CsvFileInfo:
 # TODO:2023-01-12 ここではまだ一括で登録をする作業はできないので、gsheet利用優先で実装中
 @dataclass
 class EstimateCalcSheetInfo:
+    # google sheetの問い合わせがあるので、sheetのserviceを受け取る
+    sheet_service: build
+
     # gsheet_url | openpyxl.ws を受け取るような仕様にする。
     calcsheet_source: str | Path
     anken_number: str = field(init=False)
@@ -236,12 +240,12 @@ class EstimateCalcSheetInfo:
             case str():
                 # TODO:2023-04-19 ここはtryの中身が多すぎるので、API問い合わせ事にexceptする。
                 try:
-                    sheet_service = build("sheets", "v4", credentials=google_cred)
+                    # sheet_service = build("sheets", "v4", credentials=google_cred)
 
                     # スプレッドシート名を収集して、anken_numberを生成
 
                     self.gsheet_values = (
-                        sheet_service.spreadsheets()
+                        self.sheet_service.spreadsheets()
                         .get(
                             spreadsheetId=self.calcsheet_source,
                         )
@@ -276,7 +280,7 @@ class EstimateCalcSheetInfo:
                     # シートの情報を収集して各フィールドへ追加す各
                     range_names = list(range_map.keys())
                     estimate_calc_gsheet_values_res = (
-                        sheet_service.spreadsheets()
+                        self.sheet_service.spreadsheets()
                         .values()
                         .batchGet(
                             spreadsheetId=self.calcsheet_source,

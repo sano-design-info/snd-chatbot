@@ -131,13 +131,13 @@ class QuoteItem(EstimateCalcSheetInfo):
 @click.command()
 @click.option("--dry-run", is_flag=True, help="Dry Run Flag")
 def main(dry_run):
-    # 一連の操作中に使うデータ構造を入れるリスト（グループ化はメール生成時に行う）
-    quote_items: list[QuoteItem] = []
-
     # Googleのtokenを用意
     google_cred = api.googleapi.get_cledential(GOOGLE_API_SCOPES)
     gdrive_serivice = build("drive", "v3", credentials=google_cred)
     gmail_service = build("gmail", "v1", credentials=google_cred)
+    sheet_service = build("sheets", "v4", credentials=google_cred)
+    # 一連の操作中に使うデータ構造を入れるリスト（グループ化はメール生成時に行う）
+    quote_items: list[QuoteItem(sheet_service)] = []
 
     # mfcloudのセッション作成
     mfci_cred = MFCICledential()
