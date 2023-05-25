@@ -137,7 +137,7 @@ def main(dry_run):
     gmail_service = build("gmail", "v1", credentials=google_cred)
     sheet_service = build("sheets", "v4", credentials=google_cred)
     # 一連の操作中に使うデータ構造を入れるリスト（グループ化はメール生成時に行う）
-    quote_items: list[QuoteItem(sheet_service)] = []
+    quote_items: list[QuoteItem] = []
 
     # mfcloudのセッション作成
     mfci_cred = MFCICledential()
@@ -198,7 +198,7 @@ def main(dry_run):
 
     # MFクラウドの見積書jsonデータを作成させて関連結果含めてQuoteItemに入れる
     for estimate_calcsheet in selected_estimate_calcsheets:
-        quote_item = QuoteItem(estimate_calcsheet.get("id"))
+        quote_item = QuoteItem(sheet_service, estimate_calcsheet.get("id"))
         quote_item.calcsheet_parents = estimate_calcsheet.get("parents")
         # サマリーを表示する
         quote_item.print_quote_info()
@@ -259,13 +259,13 @@ def main(dry_run):
         msmankenmaplist.msmankenmap_list.append(msmanken_info)
 
         export_pd = msmankenmaplist.generate_update_sheet_values()
-        before_pd = get_schedule_table_area(table_search_range, google_cred)
+        before_pd = get_schedule_table_area(table_search_range, sheet_service)
         update_data = generate_update_valueranges(
             table_search_range, before_pd, export_pd
         )
         print(f"update result:{update_data}")
 
-        update_schedule_sheet(update_data, google_cred)
+        update_schedule_sheet(update_data, sheet_service)
 
     # メールの下書きを生成。案件のベース番号をもとにグルーピングをして一つのメールに複数の見積を添付する
     quote_groups = itertools.groupby(quote_items, lambda x: x.anken_base_number)

@@ -8,11 +8,9 @@ import dateutil.parser
 import dateutil.tz
 import openpyxl
 import pandas
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
+from googleapiclient.discovery import Resource, build
 from googleapiclient.errors import HttpError
 
-from api import googleapi
 from helper import decode_base64url, load_config, rangeconvert
 from helper.regexpatterns import MSM_ANKEN_NUMBER
 
@@ -24,9 +22,6 @@ update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
 range_addr_pattern = re.compile(
     r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
 )
-
-# TODO:2023-05-24 このcredはgoogleapi.pyに移動するほうがいい? -> 循環importの解決には多分ならない（やってることが変わらない）
-google_cred: Credentials = googleapi.get_cledential(googleapi.API_SCOPES)
 
 
 def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
@@ -216,7 +211,7 @@ class CsvFileInfo:
 @dataclass
 class EstimateCalcSheetInfo:
     # google sheetの問い合わせがあるので、sheetのserviceを受け取る
-    sheet_service: build
+    sheet_service: Resource
 
     # gsheet_url | openpyxl.ws を受け取るような仕様にする。
     calcsheet_source: str | Path
@@ -240,8 +235,6 @@ class EstimateCalcSheetInfo:
             case str():
                 # TODO:2023-04-19 ここはtryの中身が多すぎるので、API問い合わせ事にexceptする。
                 try:
-                    # sheet_service = build("sheets", "v4", credentials=google_cred)
-
                     # スプレッドシート名を収集して、anken_numberを生成
 
                     self.gsheet_values = (
@@ -411,7 +404,7 @@ class MsmAnkenMapList:
 
 # TODO:2023-05-23 スケジュール表更新用の関数は別のファイルに移動するほうが良い。
 def get_schedule_table_area(
-    search_range: str, google_cred
+    search_range: str, sheet_service: Resource
 ) -> tuple[str, pandas.DataFrame]:
     # 更新対称のセル範囲から値を取得
     try:
@@ -419,7 +412,6 @@ def get_schedule_table_area(
             [],
         ]
         # appendを使ってテーブルの範囲を取得最終行からテーブルの範囲を取得
-        sheet_service = build("sheets", "v4", credentials=google_cred)
         append_end_row = (
             sheet_service.spreadsheets()
             .values()
@@ -508,14 +500,13 @@ def generate_update_valueranges(
     return result_rangevalues
 
 
-def update_schedule_sheet(update_data: list[dict], google_cred):
+def update_schedule_sheet(update_data: list[dict], sheet_service: Resource):
     # 最後にbatchUpdateを行うためのデータ構造を生成して流し込む
     update_value_body = {
         "data": [update_data],
         "valueInputOption": "USER_ENTERED",
     }
 
-    sheet_service = build("sheets", "v4", credentials=google_cred)
     try:
         update_gsheet_res = (
             sheet_service.spreadsheets()
