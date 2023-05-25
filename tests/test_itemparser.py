@@ -17,3 +17,27 @@ from itemparser import *
 )
 def test_convert_gmail_datetimestr(datetimestr, expected):
     assert convert_gmail_datetimestr(datetimestr) == expected
+
+
+# ExpandedMessageItemのテスト
+# gmail apiの users.messages.get で取得したメッセージの情報を保持するクラス
+# テスト用のjsonファイルを用意して、それを読み込んでテストする
+def test_ExpandedMessageItem():
+    pass
+
+
+# RenrakukoumokuInfo
+
+
+# CsvFileInfo
+
+# EstimateCalcSheetInfo
+
+# MsmAnkenMap
+
+# MsmAnkenMapList
+
+# 関連する関数のテスト
+# generate_update_valueranges
+
+#
