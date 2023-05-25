@@ -51,14 +51,16 @@ def generate_dl_numbers(dl_numbers_str: str) -> list:
 @dataclass
 class BillingTargetQuote:
     only_katasiki: str = field(init=False)
-    durarion: str = ""
+    durarion: str = field(init=False)
+    # TODO:2023-05-25 durarionは元のstrは残したほうがいいな
+    durarion_src: str = ""
     price: float = 0
     hinmoku_title: str = ""
 
     def __post_init__(self):
         # TODO:2022-11-25 ここは正規表現で取り出したほうが安全かな
         self.only_katasiki = self.hinmoku_title.split(" ")[0]
-        self.durarion = self.durarion.split("  ")[1]
+        self.durarion = self.durarion_src.split("  ")[1]
 
 
 @dataclass
@@ -277,7 +279,7 @@ def main():
 
         # TODO:2022-11-25 個々のdataclassは最後に初期化する
         billing_target_quote = BillingTargetQuote(
-            durarion=quote_item["attributes"]["detail"],
+            durarion_src=quote_item["attributes"]["detail"],
             price=float(result_item["attributes"]["subtotal"]),
             hinmoku_title=quote_item["attributes"]["name"],
         )
