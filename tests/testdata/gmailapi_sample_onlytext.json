@@ -1,0 +1,56 @@
+{
+  "id": "187b63167c05df9c",
+  "threadId": "187b630e60567bb3",
+  "labelIds": ["SENT"],
+  "snippet": "こちらのメールは見積作成とメールスレッド登録テストです。2回目。CC入り==================== 株式会社佐野設計事務所佐野 浩士email : hiroshi.sano@sano-design.info Webサイト : http://sano-design.info/ TEL : 0545-55-1166 ====================",
+  "payload": {
+    "partId": "",
+    "mimeType": "text/plain",
+    "filename": "",
+    "headers": [
+      {
+        "name": "MIME-Version",
+        "value": "1.0"
+      },
+      {
+        "name": "Date",
+        "value": "Tue, 25 Apr 2023 11:15:02 +0900"
+      },
+      {
+        "name": "Message-ID",
+        "value": "\u003cCAFq-geUgXKu_tY654Lq83P0zmOa8BLGqVPXXM48VxxD+vqVNOA@mail.gmail.com\u003e"
+      },
+      {
+        "name": "Subject",
+        "value": "見積作成 メールスレッド登録テスト2 MA-0000"
+      },
+      {
+        "name": "From",
+        "value": "\"佐野設計事務所 佐野浩士\" \u003chiroshi.sano@sano-design.info\u003e"
+      },
+      {
+        "name": "To",
+        "value": "hiroshi.sano+test01@sano-design.info"
+      },
+      {
+        "name": "Cc",
+        "value": "hiroshi.sano+test02@sano-design.info"
+      },
+      {
+        "name": "Content-Type",
+        "value": "text/plain; charset=\"UTF-8\""
+      },
+      {
+        "name": "Content-Transfer-Encoding",
+        "value": "base64"
+      }
+    ],
+    "body": {
+      "size": 300,
+      "data": "44GT44Gh44KJ44Gu44Oh44O844Or44Gv6KaL56mN5L2c5oiQ44Go44Oh44O844Or44K544Os44OD44OJ55m76Yyy44OG44K544OI44Gn44GZ44CCMuWbnuebruOAgkND5YWl44KKDQo9PT09PT09PT09PT09PT09PT09PQ0K5qCq5byP5Lya56S-5L2Q6YeO6Kit6KiI5LqL5YuZ5omADQrkvZDph47jgIDmtanlo6sNCmVtYWlsIDogaGlyb3NoaS5zYW5vQHNhbm8tZGVzaWduLmluZm8NCldlYuOCteOCpOODiCA6IGh0dHA6Ly9zYW5vLWRlc2lnbi5pbmZvLw0KVEVMIDogMDU0NS01NS0xMTY2DQo9PT09PT09PT09PT09PT09PT09PQ0K"
+    }
+  },
+  "sizeEstimate": 932,
+  "historyId": "8987104",
+  "internalDate": "1682388902000"
+}
