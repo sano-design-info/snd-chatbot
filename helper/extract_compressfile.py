@@ -25,7 +25,7 @@ def extract_file(file_path: Path, output_folder: Path, password: str = None) -> 
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # パスワードが間違っているか確認
-    if "Wrong password?" in result.stderr.decode():
+    if "Wrong password" in result.stderr.decode():
         raise ValueError(f"ファイル {str(file_path)} のパスワードが間違っています。")
 
     # コマンドが成功したかどうかを返す

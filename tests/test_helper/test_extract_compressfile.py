@@ -23,3 +23,25 @@ def test_extract_file(remove_extracted_file):
 
     # 検証: ファイルは2つ出てきたか
     assert len(list(testdata_extracted_path.glob("*"))) == 2
+
+
+# パスワード付きzipファイルのテスト
+# パスワード付きzipファイル: usepassword.zip
+def test_extract_passwordfile(remove_extracted_file):
+    # パスワードが間違ってた場合のテスト
+    with pytest.raises(ValueError):
+        print(
+            extract_file(
+                testdata_path / "usepassword.zip",
+                testdata_extracted_path,
+                password="wrongpassword",
+            )
+        )
+
+    # パスワードが正しい場合のテスト
+    extract_file(
+        testdata_path / "usepassword.zip", testdata_extracted_path, password="password"
+    )
+
+    # 検証: ファイルは1つ出てきたか
+    assert len(list(testdata_extracted_path.glob("*"))) == 1
