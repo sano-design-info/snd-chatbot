@@ -113,9 +113,10 @@ def generate_billing_json_data(billing_data: BillingData) -> dict:
 
 # 見積書一覧を元にテンプレの行を生成
 def generate_invoice(mfcloud_invoice_session, billing_data_json_data) -> Path:
+    # TODO:2023-05-30 この請求書作成部分は分離して、APIモジュール側へ入れる。
     # 請求書を生成する
     generated_billing_res = mfcloud_invoice_session.post(
-        f"{API_ENDPOINT}billings?excise_type=boolean",
+        f"{API_ENDPOINT}/billings?excise_type=boolean",
         data=json.dumps(billing_data_json_data),
         headers={"content-type": "application/json", "accept": "application/json"},
     )

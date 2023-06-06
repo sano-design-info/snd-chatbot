@@ -13,7 +13,7 @@ config = load_config.CONFIG
 
 AUTHORZATION_BASE_URL = "https://invoice.moneyforward.com/oauth/authorize"
 TOKEN_URL = "https://invoice.moneyforward.com/oauth/token"
-API_ENDPOINT = "https://invoice.moneyforward.com/api/v2/"
+API_ENDPOINT = "https://invoice.moneyforward.com/api/v2"
 
 # TODO:2022-04-05 token更新時にアクセスするローカルサーバーをつくってハンドリングできないかかんがえてみる
 # TODO:2023-03-28 上のTodoはAPI v3から対応する。
@@ -57,7 +57,6 @@ class MFCICledential:
             pickle.dump(token, access_token_cache)
 
     def get_session(self) -> OAuth2Session:
-
         self._token = self._load_token()
 
         if self._token:
@@ -94,7 +93,7 @@ def generate_quote(mfcloud_invoice_session: OAuth2Session, quote_data: dict) -> 
     headers = {"content-type": "application/json", "accept": "application/json"}
 
     generated_quote_res = mfcloud_invoice_session.post(
-        f"{API_ENDPOINT}quotes?excise_type=boolean",
+        f"{API_ENDPOINT}/quotes?excise_type=boolean",
         data=json.dumps(quote_data),
         headers=headers,
     )
@@ -121,7 +120,21 @@ def get_quote_list(
 ) -> dict:
     """最近の見積一覧を取得する。"""
     quote_res = mfcloud_invoice_session.get(
-        f"{API_ENDPOINT}quotes/?page=1&per_page={per_page_length}&excise_type=boolean"
+        f"{API_ENDPOINT}/quotes/?page=1&per_page={per_page_length}&excise_type=boolean"
+    )
+
+    return json.loads(quote_res.content)
+
+
+# 請求書一覧を取得する
+def get_billing_list(
+    mfcloud_invoice_session: OAuth2Session,
+    per_page_length: int,
+) -> dict:
+    # TODO:2023-05-30 ここでは請求書一覧となるから、フィルターをかける必要がある。
+    """最近の見積一覧を取得する。"""
+    quote_res = mfcloud_invoice_session.get(
+        f"{API_ENDPOINT}/billings/?page=1&per_page={per_page_length}&excise_type=boolean"
     )
 
     return json.loads(quote_res.content)
