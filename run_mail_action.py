@@ -19,7 +19,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
 from api import googleapi
-from helper import decode_base64url, extract_zip, load_config
+from helper import decode_base64url, load_config, extract_compressfile
 from itemparser import ExpandedMessageItem
 
 target_userid = "me"
@@ -225,7 +225,12 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
     # 添付ファイルを解凍する
     for attachment_zfile in attachment_dirpath.glob("*.zip"):
         print(attachment_zfile)
-        extract_zip.extract_zipfile(attachment_zfile, attachment_dirpath)
+        try:
+            # TODO:2023-06-06 パスワード対応はしていないので、パスワードがかかっている場合はエラーになる
+            _ = extract_compressfile.extract_file(attachment_zfile, attachment_dirpath)
+        except ValueError as e:
+            # パスワード入れずに処理 or 間違っている場合はエラーになるので、その場合はスキップする
+            print(e)
 
     # 添付ファイルをコピーする
     # TODO:2022-12-16 プロジェクトフォルダの名称は環境変数化したほうがいいかも？
