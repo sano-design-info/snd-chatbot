@@ -304,7 +304,7 @@ class EstimateCalcSheetInfo:
                     f"This source is cant use class:{self.calcsheet_source}"
                 )
 
-    def fix_datetime(datetime_str: str) -> datetime:
+    def fix_datetime(self, datetime_str: str) -> datetime:
         """
         日付の入力の区切り文字を修正する。
         """
