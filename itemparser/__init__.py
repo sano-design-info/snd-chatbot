@@ -157,7 +157,7 @@ class RenrakukoumokuInfo:
         # 念のために前処理でスペースがあれば除去してる
         self.anken_base_number = MSM_ANKEN_NUMBER.search(
             self.renrakukoumoku_path.name.replace(" ", "")
-        ).group(1)
+        ).group("basepartnumber")
 
         renrakukoumoku_ws = openpyxl.load_workbook(self.renrakukoumoku_path).active
         version_pattern_check = renrakukoumoku_ws["B9"].value
@@ -194,7 +194,9 @@ class CsvFileInfo:
         self.anken_number = self.csv_filepath.stem.replace(" ", "").replace("_", "-")
 
         # 正規表現で MA-0000, MA-0000-1という
-        self.anken_base_number = MSM_ANKEN_NUMBER.search(self.anken_number).group(1)
+        self.anken_base_number = MSM_ANKEN_NUMBER.search(self.anken_number).group(
+            "basepartnumber"
+        )
 
         csv_pd = pandas.read_csv(self.csv_filepath, encoding="shift-jis")
         hose_parts_pd = csv_pd[csv_pd["品名"] == "ホース(継手付)"]
@@ -251,7 +253,7 @@ class EstimateCalcSheetInfo:
                     ).group(0)
                     self.anken_base_number = MSM_ANKEN_NUMBER.search(
                         self.anken_number
-                    ).group(1)
+                    ).group("basepartnumber")
 
                     # 古い仕様のシートと新しいシートの違いで、range_mapを変える。計算結果シートがある場合はそこを参照
                     estimate_calc_sheetnames = [
