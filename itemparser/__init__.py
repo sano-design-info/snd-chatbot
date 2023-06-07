@@ -218,6 +218,7 @@ class EstimateCalcSheetInfo:
     anken_number: str = field(init=False)
     anken_base_number: str = field(init=False)
     calcsheet_parents: list[str] = field(init=False)
+    _duration_src: str = field(init=False)
     duration: datetime = field(init=False)
     duration_str: str = field(init=False)
     # TODO:2023-04-19 ここはstrだが、利用する場所でintに置き換えるのでstrで良い
@@ -261,13 +262,13 @@ class EstimateCalcSheetInfo:
                     # TODO:2023-01-12 この部分は判断方法と結果を返す関数にした方がいいと思われる。クラスの裏に分離したほうがいいな
                     range_map = {
                         "Sheet1!F17": "price",
-                        "Sheet1!F1": "duration",
+                        "Sheet1!F1": "_duration_src",
                     }
 
                     if "計算結果" in estimate_calc_sheetnames:
                         range_map = {
                             "'計算結果'!B5": "price",
-                            "'計算結果'!B6": "duration",
+                            "'計算結果'!B6": "_duration_src",
                         }
 
                     # シートの情報を収集して各フィールドへ追加す各
@@ -289,7 +290,7 @@ class EstimateCalcSheetInfo:
                             str(res_value.get("values")[0][0]),
                         )
                     # gsheetで取り込んだ結果が数字になってしまう...
-                    self.duration = self.fix_datetime(self.duration)
+                    self.duration = self.fix_datetime(self._duration_src)
                     self.duration_str = self.duration.strftime("%m/%d")
                     self.price = re.sub(r"[\¥\,]", "", self.price)
 
@@ -304,7 +305,7 @@ class EstimateCalcSheetInfo:
                     f"This source is cant use class:{self.calcsheet_source}"
                 )
 
-    def fix_datetime(datetime_str: str) -> datetime:
+    def fix_datetime(self, datetime_str: str) -> datetime:
         """
         日付の入力の区切り文字を修正する。
         """
