@@ -31,6 +31,7 @@ def test_match_msm_anken_number(targetstr):
 def test_group_msm_anken_number(targetstr, expected):
     assert MSM_ANKEN_NUMBER.match(targetstr).groups() == expected
 
+
 # get_billingのテスト
 def test_match_billing_durarion():
     assert BILLING_DURARION.match("納期 1/2") is not None
@@ -40,3 +41,10 @@ def test_match_billing_durarion():
 
 
 # itemparserのテスト
+def test_match_range_addr_pattern():
+    assert RANGE_ADDR_PATTERN.match("sheetname!A1") is not None
+    assert RANGE_ADDR_PATTERN.match("sheetname!A1").groups() == ("sheetname", "A", "1")
+    # グループ名
+    assert RANGE_ADDR_PATTERN.match("sheetname!A1").group("sheetname") == "sheetname"
+    assert RANGE_ADDR_PATTERN.match("sheetname!A1").group("firstcolumn") == "A"
+    assert RANGE_ADDR_PATTERN.match("sheetname!A1").group("firstrow") == "1"

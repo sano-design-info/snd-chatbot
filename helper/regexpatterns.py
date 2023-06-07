@@ -21,3 +21,9 @@ MSM_ANKEN_NUMBER = re.compile(
 # get_billingのパターン
 BILLING_DURARION = re.compile(r"納期\s*(?P<durarion>\d{1,2}/\d{1,2})")
 
+# itemparserのパターン
+
+# "sheetname!A1"の形式でマッチする。
+RANGE_ADDR_PATTERN = re.compile(
+    r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
+)
