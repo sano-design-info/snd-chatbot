@@ -12,16 +12,11 @@ from googleapiclient.discovery import Resource, build
 from googleapiclient.errors import HttpError
 
 from helper import decode_base64url, load_config, rangeconvert
-from helper.regexpatterns import MSM_ANKEN_NUMBER
+from helper.regexpatterns import MSM_ANKEN_NUMBER, RANGE_ADDR_PATTERN
 
 # load config
 config = load_config.CONFIG
 update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
-
-# Excel, Gsheetのセルアドレスのパターン。"sheetname!A1"の形式でマッチする。
-range_addr_pattern = re.compile(
-    r"^(?P<sheetname>.*)!(?P<firstcolumn>[A-Z]+)(?P<firstrow>\d+)"
-)
 
 
 def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
@@ -157,7 +152,7 @@ class RenrakukoumokuInfo:
         # 念のために前処理でスペースがあれば除去してる
         self.anken_base_number = MSM_ANKEN_NUMBER.search(
             self.renrakukoumoku_path.name.replace(" ", "")
-        ).group(1)
+        ).group("basepartnumber")
 
         renrakukoumoku_ws = openpyxl.load_workbook(self.renrakukoumoku_path).active
         version_pattern_check = renrakukoumoku_ws["B9"].value
@@ -194,7 +189,9 @@ class CsvFileInfo:
         self.anken_number = self.csv_filepath.stem.replace(" ", "").replace("_", "-")
 
         # 正規表現で MA-0000, MA-0000-1という
-        self.anken_base_number = MSM_ANKEN_NUMBER.search(self.anken_number).group(1)
+        self.anken_base_number = MSM_ANKEN_NUMBER.search(self.anken_number).group(
+            "basepartnumber"
+        )
 
         csv_pd = pandas.read_csv(self.csv_filepath, encoding="shift-jis")
         hose_parts_pd = csv_pd[csv_pd["品名"] == "ホース(継手付)"]
@@ -251,7 +248,7 @@ class EstimateCalcSheetInfo:
                     ).group(0)
                     self.anken_base_number = MSM_ANKEN_NUMBER.search(
                         self.anken_number
-                    ).group(1)
+                    ).group("basepartnumber")
 
                     # 古い仕様のシートと新しいシートの違いで、range_mapを変える。計算結果シートがある場合はそこを参照
                     estimate_calc_sheetnames = [
@@ -425,11 +422,11 @@ def get_schedule_table_area(
             )
         ).execute()
 
-        last_low_range = range_addr_pattern.match(
+        last_low_range = RANGE_ADDR_PATTERN.match(
             append_end_row.get("updates").get("updatedRange"),
         ).group("firstrow")
 
-        schedule_range_matcher = range_addr_pattern.match(search_range)
+        schedule_range_matcher = RANGE_ADDR_PATTERN.match(search_range)
 
         schedule_table_range = f"{schedule_range_matcher.group(0)}:Q{last_low_range}"
 
@@ -471,7 +468,7 @@ def generate_update_valueranges(
     """
 
     # TODO: 2023/01/16 今回はcolumnについては何も考慮していない。A1表記のAを変換して数字にした上で、次のテーブルのループで対象のセルアドレスを生成する必要あり。今回はA列から取ってるからやらなくていいけど、実装の余裕ができたらやろう
-    schedule_range_matcher = range_addr_pattern.match(search_range)
+    schedule_range_matcher = RANGE_ADDR_PATTERN.match(search_range)
 
     start_row = int(schedule_range_matcher.group("firstrow")) + 1
 

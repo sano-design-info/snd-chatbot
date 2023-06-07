@@ -13,6 +13,7 @@ import api.googleapi
 
 from helper import load_config
 from api.mfcloud_api import API_ENDPOINT, MFCICledential, get_quote_list
+from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
 
 # `2020-01-01` のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
@@ -59,8 +60,8 @@ class BillingTargetQuote:
 
     def __post_init__(self):
         # TODO:2022-11-25 ここは正規表現で取り出したほうが安全かな
-        self.only_katasiki = self.hinmoku_title.split(" ")[0]
-        self.durarion = self.durarion_src.split("  ")[1]
+        self.only_katasiki = MSM_ANKEN_NUMBER.match(self.hinmoku_title).group(0)
+        self.durarion = BILLING_DURARION.match(self.durarion_src).group("durarion")
 
 
 @dataclass

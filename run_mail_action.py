@@ -20,6 +20,8 @@ from jinja2 import Environment, FileSystemLoader
 
 from api import googleapi
 from helper import decode_base64url, load_config, extract_compressfile
+
+# from helper.regexpatterns import MSM_ANKEN_NUMBER
 from itemparser import ExpandedMessageItem
 
 target_userid = "me"
@@ -196,6 +198,10 @@ def pick_msm_katasiki_by_renrakukoumoku_filename(filepath: Path) -> str:
         str(filepath.name),
     ):
         msm_katasiki_num = katasiki_matcher.group(1)
+    # TODO:2023-06-07 以下はシンプルに型式の番号のみ抽出をしているが、修正案件向けの対応が必要。
+    # 0000-1 のような形を取る場合の処理を追加する。良い方法が見つかったら検討すること
+    # if katasiki_matcher := MSM_ANKEN_NUMBER.match(str(filepath.name)):
+    #     msm_katasiki_num = katasiki_matcher.group("onlkynumber")
 
     return msm_katasiki_num
 
