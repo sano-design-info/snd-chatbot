@@ -103,7 +103,7 @@ def generate_mail_printhtml(
     # jinja2埋込
     # テンプレート読み込み
     env = Environment(
-        loader=FileSystemLoader(str((parent_dirpath / "prepare")), encoding="utf8")
+        loader=FileSystemLoader(str((parent_dirpath / "")), encoding="utf8")
     )
     tmpl = env.get_template("export.html.jinja")
 
