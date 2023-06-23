@@ -20,6 +20,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from api import googleapi
 from helper import decode_base64url, load_config, extract_compressfile
+from helper.regexpatterns import MSM_ANKEN_NUMBER
 
 # from helper.regexpatterns import MSM_ANKEN_NUMBER
 from itemparser import ExpandedMessageItem
@@ -187,21 +188,22 @@ def generate_pdf_by_renrakukoumoku_excel(
 
 
 def pick_msm_katasiki_by_renrakukoumoku_filename(filepath: Path) -> str:
-    # 配管連絡項目から必要な情報を取り出して、スケジュール表を更新
-    # TODO:2022-12-14 ボイラープレートはExcelファイルのファイルパスから型式を取り出す
+    """
+    ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
+    取得ができない場合は0000を用意
 
-    # ボイラープレートと見積書作成時に必要になるミスミ型式番号を取得
-    # 取得ができない場合は0000を用意
+    args:
+        filepath: ファイルパス
+    return:
+        msm_katasiki_num: 型式番号
+    """
     msm_katasiki_num = "0000"
-    if katasiki_matcher := re.match(
-        r"MA-(\d{1,4}|\d{1,4}-\d{1})_",
-        str(filepath.name),
-    ):
-        msm_katasiki_num = katasiki_matcher.group(1)
-    # TODO:2023-06-07 以下はシンプルに型式の番号のみ抽出をしているが、修正案件向けの対応が必要。
-    # 0000-1 のような形を取る場合の処理を追加する。良い方法が見つかったら検討すること
-    # if katasiki_matcher := MSM_ANKEN_NUMBER.match(str(filepath.name)):
-    #     msm_katasiki_num = katasiki_matcher.group("onlkynumber")
+
+    # ここでは、追加案件: MA-0000-1 のような 表記は対応していない。このスクリプト上で追加案件を対応することは無いと思われる。
+    # TODO:2023-06-23 追加案件を対応する場合は、泥臭いけど全体をmatchさせてから、groupsの最後で -1のような追加表現があるかを確認して、あれば、抽出したファイル名にして返せばよいと思う。
+    # 今後発生したら実装しよう。
+    if katasiki_matcher := MSM_ANKEN_NUMBER.match(str(filepath.name)):
+        msm_katasiki_num = katasiki_matcher.group("onlynumber")
 
     return msm_katasiki_num
 
