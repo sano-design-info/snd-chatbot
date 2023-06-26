@@ -189,7 +189,11 @@ def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
         "price": 4,
     }
 
-    wb = openpyxl.load_workbook("./post_process/billing_list_template.xlsx")
+    parent_dirpath = Path(__file__).parents[0]
+
+    wb = openpyxl.load_workbook(
+        str((parent_dirpath / "itemparser/billing_list_template.xlsx"))
+    )
     ws = wb.active
 
     # A1セルに"2023年**月請求一覧"と入れる。**は今月の月
