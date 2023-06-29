@@ -41,7 +41,7 @@ GOOGLE_API_SCOPES = googleapi.API_SCOPES
 # load config
 config = load_config.CONFIG
 gsheet_tmmp_dir_ids = config.get("google").get("GSHEET_TMP_DIR_IDS")
-msm_gas_boilerplate_url = config.get("other").get("MSM_GAS_BOILERPLATE_URL")
+msm_gas_boilerplate_path = config.get("other").get("MSM_GAS_BOILERPLATE_PATH")
 schedule_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
 table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 estimate_template_gsheet_id = config.get("google").get("ESTIMATE_TEMPLATE_GSHEET_ID")
@@ -225,7 +225,7 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
         "project_name": msm_katasiki_num,
     }
     generated_copier_worker = copier.run_copy(
-        msm_gas_boilerplate_url,
+        msm_gas_boilerplate_path,
         export_project_dir,
         data=boilerplate_config,
     )

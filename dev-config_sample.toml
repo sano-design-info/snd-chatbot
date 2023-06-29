@@ -48,7 +48,7 @@ body = """
 """
 
 [other]
-# ボイラープレートのgiturl
-MSM_GAS_BOILERPLATE_URL="http://192.168.35.52:3000/snd-private/misumi-gas-boilerplate.git"
+# ボイラープレートのローカルパス
+MSM_GAS_BOILERPLATE_PATH=""
 # run_mail_actionで生成したフォルダのコピー先
 COPY_PROJECT_DIR_DEST_PATH = ""
