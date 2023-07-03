@@ -19,6 +19,7 @@ requests-oauthlib = "*"
 click = "*"
 toml = "*"
 tzdata = "*"
+selenium = "*"
 
 [dev-packages]
 black = "*"
