@@ -21,6 +21,7 @@ toml = "*"
 tzdata = "*"
 selenium = "*"
 webdriver-manager = "*"
+colorama = "*"
 
 [dev-packages]
 black = "*"

@@ -1,0 +1,42 @@
+version: '3.8'
+services:
+  msmgasprepare:
+    # 既存のDockerfileを呼び出す
+    container_name: msm-gas-prepare
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    tty: true
+
+    # ボリュームマウントをする。NFSを使う。ChatGPTで適当に作ってもらったから、あとで精査する
+    volumes:
+      - type: bind
+        source: ./google_client_secret.json
+        target: /app/google_client_secret.json
+      - type: bind
+        source: ./config.toml
+        target: /app/config.toml
+      - type: volume
+        source: exportdir
+        target: /app/exportdir
+      - type: volume
+        source: synology_drive_point
+        target: /app/m_synology_drive_point
+    ports:
+      - "18081:18081"
+    # 環境変数どうしよう？
+    
+volumes:
+  exportdir:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=192.168.35.18,rw
+      device: ":/volume1/msm-gas-prepare-dktest/"
+  synology_drive_point:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=192.168.35.18,rw
+      device: ":/volume1/sny-workdir/作業用共有フォルダ/"

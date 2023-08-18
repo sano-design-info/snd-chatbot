@@ -5,7 +5,7 @@ from pathlib import Path
 
 from requests_oauthlib import OAuth2Session
 
-from helper import load_config
+from helper import EXPORTDIR_PATH, load_config
 
 # load config, credential
 
@@ -28,7 +28,7 @@ class MFCICledential:
     def _load_token(self):
         """トークンを取得する。"""
         try:
-            with open("access_token.dat", "rb") as access_token_cache:
+            with (EXPORTDIR_PATH / "access_token.dat").open("rb") as access_token_cache:
                 token = pickle.load(access_token_cache)
         except IOError:
             return None
@@ -53,7 +53,7 @@ class MFCICledential:
 
     def _save_token(self, token):
         # 取得したtokenをpickleで直列化
-        with open("access_token.dat", "wb") as access_token_cache:
+        with (EXPORTDIR_PATH / "access_token.dat").open("wb") as access_token_cache:
             pickle.dump(token, access_token_cache)
 
     def get_session(self) -> OAuth2Session:

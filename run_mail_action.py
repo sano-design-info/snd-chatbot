@@ -2,7 +2,6 @@ import base64
 import html
 import io
 import itertools
-import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +18,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from jinja2 import Environment, FileSystemLoader
 
 from api import googleapi
-from helper import decode_base64url, load_config, extract_compressfile
+from helper import EXPORTDIR_PATH, decode_base64url, load_config, extract_compressfile
 from helper.regexpatterns import MSM_ANKEN_NUMBER
 
 # from helper.regexpatterns import MSM_ANKEN_NUMBER
@@ -29,12 +28,12 @@ target_userid = "me"
 
 # generate Path
 parent_dirpath = Path(__file__).parents[0]
-export_dirpath = (
-    parent_dirpath
+exportfiles_dirpath = (
+    EXPORTDIR_PATH
     / "export_files"
     / f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 )
-attachment_dirpath = export_dirpath / "attachments"
+attachment_dirpath = exportfiles_dirpath / "attachments"
 
 GOOGLE_API_SCOPES = googleapi.API_SCOPES
 
@@ -68,7 +67,7 @@ def save_attachment_file(
 
 
 def generate_dirs() -> None:
-    export_dirpath.mkdir(exist_ok=True, parents=True)
+    exportfiles_dirpath.mkdir(exist_ok=True, parents=True)
     attachment_dirpath.mkdir(exist_ok=True)
 
 
@@ -415,7 +414,7 @@ def main() -> None:
                     .get(userId=target_userid, id=message_id, fields="messages")
                 ).execute()
 
-                if len(thread_result.get("messages")) <= 2:
+                if len(thread_result.get("messages")) <= 12:
                     # スレッドの一番先頭にあるメッセージを取得する
                     messages.append(
                         ExpandedMessageItem(
@@ -519,14 +518,14 @@ def main() -> None:
 
     print("[Generate Excel Printable PDF]")
     generate_pdf_by_renrakukoumoku_excel(
-        attachment_dirpath, export_dirpath, google_cred
+        attachment_dirpath, exportfiles_dirpath, google_cred
     )
 
     if ask_generate_projectfile:
         print("[Generate template dirs]")
-        generate_projectdir(attachment_dirpath, export_dirpath)
+        generate_projectdir(attachment_dirpath, exportfiles_dirpath)
         print("[copy project dir]")
-        copy_projectdir(export_dirpath)
+        copy_projectdir(exportfiles_dirpath)
     else:
         print("[Not Generate template dirs]")
 

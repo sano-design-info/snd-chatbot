@@ -163,3 +163,4 @@ billing/
 debug.log
 config.toml
 dev-config.toml
+google_client_secret.json

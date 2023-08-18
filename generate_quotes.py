@@ -1,7 +1,6 @@
 # coding: utf-8
 import itertools
 import json
-import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,7 +14,7 @@ from googleapiclient.errors import HttpError
 
 import api.googleapi
 from api.mfcloud_api import MFCICledential, download_quote_pdf, generate_quote
-from helper import load_config
+from helper import load_config, EXPORTDIR_PATH
 from itemparser import (
     EstimateCalcSheetInfo,
     MsmAnkenMap,
@@ -44,6 +43,9 @@ GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
 table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 
 SCRIPT_CONFIG = config.get("generate_quotes")
+
+export_qupte_dirpath = EXPORTDIR_PATH / "quote"
+export_qupte_dirpath.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
@@ -226,7 +228,7 @@ def main(dry_run):
 
         # PDFのファイル名はミスミの型式をつける
         quote_item.estimate_pdf_path = (
-            Path("./quote") / f"見積書_{quote_item.anken_number}.pdf"
+            export_qupte_dirpath / f"見積書_{quote_item.anken_number}.pdf"
         )
         download_quote_pdf(
             mfcloud_invoice_session,

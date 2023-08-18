@@ -3,10 +3,8 @@ import re
 import sys
 import time
 from datetime import datetime
-from pathlib import Path
 
-import toml
-from dateutil import relativedelta, tz
+from dateutil import relativedelta
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from selenium import webdriver
@@ -18,7 +16,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
 from api import googleapi, mfcloud_api
-from helper import extract_compressfile, load_config
+from helper import EXPORTDIR_PATH, extract_compressfile, load_config
 
 # 認証情報をtomlファイルから読み込む
 config = load_config.CONFIG
@@ -41,9 +39,8 @@ today_dt_minus_one_month__year = today_dt_minus_one_month.strftime("%Y")
 today_dt_minus_one_month__month = today_dt_minus_one_month.strftime("%m")
 
 # ダウンロード先フォルダを指定
-PROJ_ROOT_DIR = Path(__file__).resolve().parent
-DOWNLOAD_DIR = PROJ_ROOT_DIR / "Downloads" / "misumi_prosgate_purchase_list"
-EXPORT_DIR = PROJ_ROOT_DIR / "billing"
+DOWNLOAD_DIR = EXPORTDIR_PATH / "Downloads" / "misumi_prosgate_purchase_list"
+EXPORT_DIR = EXPORTDIR_PATH / "billing"
 
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -83,6 +80,8 @@ def main():
     # headless modeを設定
     webdriver_options = Options()
     webdriver_options.add_argument("--headless=new")
+    webdriver_options.add_argument("--no-sandbox")
+    webdriver_options.add_argument("--disable-dev-shm-usage")
     # ダウンロード先フォルダを指定
     webdriver_options.add_experimental_option(
         "prefs", {"download.default_directory": str(DOWNLOAD_DIR)}

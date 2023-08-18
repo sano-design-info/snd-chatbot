@@ -1,7 +1,7 @@
 # coding: utf-8
 import json
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from openpyxl.styles import Border, Side
 import api.googleapi
 
-from helper import load_config
+from helper import load_config, EXPORTDIR_PATH
 from api.mfcloud_api import API_ENDPOINT, MFCICledential, get_quote_list
 from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
 
@@ -24,6 +24,8 @@ MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
 QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
 SCRIPT_CONFIG = config.get("get_billing")
 
+export_billing_dirpath = EXPORTDIR_PATH / "billing"
+export_billing_dirpath.mkdir(parents=True, exist_ok=True)
 
 # 本日の日付を全体で使うためにここで宣言
 today_datetime = datetime.now()
@@ -139,7 +141,7 @@ def generate_invoice(mfcloud_invoice_session, billing_data_json_data) -> Path:
     # ファイル名は生成時の日付で良し
     # TODO:2022-11-22 請求書名は定数対応を行う
 
-    save_filepath = Path("./billing") / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
+    save_filepath = export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
 
     with save_filepath.open("wb") as save_file:
         save_file.write(billing_pdf_binary)
@@ -212,9 +214,9 @@ def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
     )
 
     # ファイルを保存する
-    save_filrpath = Path("./billing") / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
-    wb.save(save_filrpath)
-    return save_filrpath
+    save_filepath = export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
+    wb.save(save_filepath)
+    return save_filepath
 
 
 # メール下書きを作成する

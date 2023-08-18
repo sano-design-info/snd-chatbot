@@ -14,16 +14,16 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
 # load config
-from helper import load_config
+from helper import EXPORTDIR_PATH, load_config
 from itemparser import ExpandedMessageItem
 
 config = load_config.CONFIG
 cred_filepath = config.get("google").get("CRED_FILEPATH")
 
 # generate Path
-parent_dirpath = Path(__file__).parents[2]
-token_save_path = parent_dirpath / "token.json"
-cred_json = parent_dirpath / cred_filepath
+EXPORTDIR_PATH.mkdir(parents=True, exist_ok=True)
+token_save_path = EXPORTDIR_PATH / "token.json"
+cred_json = EXPORTDIR_PATH / cred_filepath
 
 API_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -55,7 +55,7 @@ def get_cledential(scopes: list[str]) -> Credentials:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(cred_json, scopes)
-            creds = flow.run_local_server(port=0)
+            creds = flow.run_local_server(bind_addr="0.0.0.0", port=18081)
         # Save the credentials for the next run
         with token_save_path.open("w") as token:
             token.write(creds.to_json())
