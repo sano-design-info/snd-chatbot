@@ -69,7 +69,7 @@ def extract_total_amount(text: str) -> int | None:
 
 def main():
     # 各APIの認証
-    mfcloud_invoice_session = mfcloud_api.MFCICledential().get_session()
+    mfci_session = mfcloud_api.MFCIClient().get_session()
 
     google_cred: Credentials = googleapi.get_cledential(googleapi.API_SCOPES)
     sheet_service = build("sheets", "v4", credentials=google_cred)
@@ -197,22 +197,18 @@ def main():
     # 2.請求書の金額を取得
 
     # 請求書一覧取得をして、取得するフィルターを掛けたうえで一か月前の請求書を取得、請求書情報から 請求金額（税抜き）を取得する
-    billing_list = mfcloud_api.get_billing_list(mfcloud_invoice_session, 100)
+    billing_list = mfcloud_api.get_billings(mfci_session, 100)
     latest_billing = next(
         (
             billing
             for billing in billing_list["data"]
-            if (
-                create_at_dt := datetime.fromisoformat(
-                    billing["attributes"]["created_at"]
-                )
-            ).year
+            if (create_at_dt := datetime.fromisoformat(billing["created_at"])).year
             == today_dt_minus_one_month.year
             and create_at_dt.month == today_dt_minus_one_month.month
-            and billing["attributes"]["department_id"] == MSM_TORIHIKISAKI_ID
+            and billing["department_id"] == MSM_TORIHIKISAKI_ID
         )
     )
-    latest_billing_price = int(float(latest_billing["attributes"]["subtotal"]))
+    latest_billing_price = int(float(latest_billing["subtotal_price"]))
 
     # 比較して同値ではないなら終了、同値なら3へすすむ
     if latest_billing_price != msm_bougth_total_amount:

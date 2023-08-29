@@ -22,6 +22,9 @@ tzdata = "*"
 selenium = "*"
 webdriver-manager = "*"
 colorama = "*"
+authlib = "*"
+cryptography = "*"
+cffi = "*"
 
 [dev-packages]
 black = "*"
@@ -29,5 +32,4 @@ flake8 = "*"
 pytest = "*"
 
 [requires]
-python_version = "3.10"
-python_full_version = "3.10.4"
+python_version = "3.11"

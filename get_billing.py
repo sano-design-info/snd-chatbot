@@ -6,13 +6,21 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from dateutil.relativedelta import relativedelta
 import openpyxl
 from googleapiclient.discovery import build
 from openpyxl.styles import Border, Side
 import api.googleapi
 
 from helper import load_config, EXPORTDIR_PATH
-from api.mfcloud_api import API_ENDPOINT, MFCICledential, get_quote_list
+from api.mfcloud_api import (
+    MFCIClient,
+    download_billing_pdf,
+    get_quotes,
+    create_item,
+    create_billing,
+    attach_billingitem_into_billing,
+)
 from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
 
 # `2020-01-01` のフォーマットのみ受け付ける
@@ -29,6 +37,10 @@ export_billing_dirpath.mkdir(parents=True, exist_ok=True)
 
 # 本日の日付を全体で使うためにここで宣言
 today_datetime = datetime.now()
+BILLING_PDFFILEPATH = export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
+BILLING_LIST_EXCELPATH = (
+    export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
+)
 
 
 def generate_dl_numbers(dl_numbers_str: str) -> list:
@@ -73,81 +85,91 @@ class BillingData:
     hinmoku_title: str
 
 
+def generate_json_mfci_billing_item(billing_data: BillingData) -> None:
+    """
+    請求情報を元に、MFクラウド請求書APIで使う請求書書向け品目用のjson文字列を生成する。
+    結果は辞書形式で返す。
+    """
+    item_json_template = """
+    {
+        "name": "品目",
+        "detail": "詳細",
+        "unit": "0",
+        "price": 0,
+        "quantity": 1,
+        "excise": "ten_percent"
+    }
+    """
+
+    # jsonでロードする
+    billing_item = json.loads(item_json_template)
+
+    # 結果をjsonで返す
+    billing_item["name"] = "{} ガススプリング配管図".format(billing_data.hinmoku_title)
+    billing_item["quantity"] = 1
+    billing_item["price"] = int(billing_data.price)
+    billing_item["name"] = billing_data.hinmoku_title
+
+    return billing_item
+
+
 def generate_billing_json_data(billing_data: BillingData) -> dict:
     """
     MFクラウド請求書APIで使う請求書作成のjsonを生成する
     """
+
     billing_json_template = """
     {
-        "billing": {
-            "department_id": "",
-            "billing_date": "2020-05-08",
-            "title": "請求書タイトル",
-            "tags": "佐野設計自動生成",
-            "note": "詳細は別添付の明細をご確認ください",
-            "items": [
-                {
-                    "name": "品目1",
-                    "unit_price": 0,
-                    "unit": "",
-                    "quantity": 1,
-                    "excise": true
-                }
-            ]
-        }
+        "department_id": "",
+        "billing_date": "2020-05-08",
+        "due_date": "2020-05-08",
+        "title": "請求書タイトル",
+        "tags": "佐野設計自動生成",
+        "note": "詳細は別添付の明細をご確認ください",
+        "items": [
+        ]
     }
     """
     # jsonでロードする
     billing_data_json = json.loads(billing_json_template)
 
     # department_idはミスミのものを利用
-    billing_data_json["billing"]["department_id"] = MISUMI_TORIHIKISAKI_ID
+    billing_data_json["department_id"] = MISUMI_TORIHIKISAKI_ID
 
     # 各情報を入れる
-    billing_data_json["billing"]["title"] = billing_data.billing_title
-    billing_data_json["billing"]["billing_date"] = today_datetime.strftime(
-        START_DATE_FORMAT
+    billing_data_json["title"] = billing_data.billing_title
+    billing_data_json["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
+    # due_dateは今月末にする
+    # ref: https://zenn.dev/wtkn25/articles/python-relativedelta#%E6%9C%88%E5%88%9D%E3%80%81%E6%9C%88%E6%9C%AB%E3%80%81%E5%85%88%E6%9C%88%E5%88%9D%E3%80%81%E5%85%88%E6%9C%88%E6%9C%AB%E3%80%81%E7%BF%8C%E6%9C%88%E5%88%9D%E3%80%81%E7%BF%8C%E6%9C%88%E6%9C%AB
+    billing_data_json["due_date"] = today_datetime + relativedelta(
+        months=+1, day=1, days=-1
     )
-    billing_data_json["billing"]["items"][0]["name"] = billing_data.hinmoku_title
-    billing_data_json["billing"]["items"][0]["unit_price"] = billing_data.price
-
     return billing_data_json
 
 
 # 見積書一覧を元にテンプレの行を生成
-def generate_invoice(mfcloud_invoice_session, billing_data_json_data) -> Path:
-    # TODO:2023-05-30 この請求書作成部分は分離して、APIモジュール側へ入れる。
-    # 請求書を生成する
-    generated_billing_res = mfcloud_invoice_session.post(
-        f"{API_ENDPOINT}/billings?excise_type=boolean",
-        data=json.dumps(billing_data_json_data),
-        headers={"content-type": "application/json", "accept": "application/json"},
+def generate_billing_pdf(mfci_session, billing_data: BillingData) -> Path:
+    """
+    MFクラウド請求書APIを使って請求書を生成する。戻り値はpdfファイルのパス
+    """
+
+    # 空の請求書作成
+    billing_json_data = generate_billing_json_data(billing_data)
+    billing_res = create_billing(mfci_session, billing_json_data)
+    # 品目を作成
+    billing_item_data = generate_json_mfci_billing_item(billing_data)
+    billing_item_res = create_item(mfci_session, billing_item_data)
+    # 請求書へ品目を追加する
+    attach_billingitem_into_billing(
+        mfci_session, billing_res["id"], billing_item_res["id"]
     )
-
-    # 生成した請求書をDLする
-    changed_billing = json.loads(generated_billing_res.content)
-
-    # エラーだったらその時点で終了:
-    if changed_billing == "" or "error" in changed_billing:
-        sys.exit("変換時にエラーが起こりました。終了します")
 
     print("請求書に変換しました")
 
     # pdfファイルのバイナリをgetする
-    billing_pdf_url = changed_billing["data"]["attributes"]["pdf_url"]
-    dl_pdf_res = mfcloud_invoice_session.get(billing_pdf_url)
-    billing_pdf_binary = dl_pdf_res.content
+    download_billing_pdf(mfci_session, billing_res["pdf_url"], BILLING_PDFFILEPATH)
 
-    # ファイル名は生成時の日付で良し
-    # TODO:2022-11-22 請求書名は定数対応を行う
-
-    save_filepath = export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
-
-    with save_filepath.open("wb") as save_file:
-        save_file.write(billing_pdf_binary)
-        print(f"ファイルが生成されました。保存先:{save_filepath}")
-
-        return save_filepath
+    return BILLING_PDFFILEPATH
 
 
 def set_border_style(
@@ -178,7 +200,9 @@ def set_border_style(
                 cell.number_format = "[$¥-ja-JP]#,##0;-[$¥-ja-JP]#,##0"
 
 
-def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
+def generate_billing_list_excel(
+    billing_target_quotes: list[BillingTargetQuote],
+) -> Path:
     """
     請求対象一覧をxlsxファイルに出力する
     """
@@ -214,9 +238,9 @@ def export_list(billing_target_quotes: list[BillingTargetQuote]) -> Path:
     )
 
     # ファイルを保存する
-    save_filepath = export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
-    wb.save(save_filepath)
-    return save_filepath
+    # TODO:2023-08-29 ここのファイル名の戻り値って意味ある？
+    wb.save(BILLING_LIST_EXCELPATH)
+    return BILLING_LIST_EXCELPATH
 
 
 # メール下書きを作成する
@@ -247,49 +271,34 @@ def set_draft_mail(attchment_filepaths: list[Path]) -> None:
 
 def main():
     # mfcloudのセッション作成
-    mfci_cred = MFCICledential()
-    mfcloud_invoice_session = mfci_cred.get_session()
+    mfci_cred = MFCIClient()
+    mfcl_session = mfci_cred.get_session()
 
-    # 見積書と品目の一覧を生成する
-
-    # 見積書と品目をマッチさせる
-    quote_result = get_quote_list(
-        mfcloud_invoice_session,
+    # 見積書一覧を取得
+    quote_result = get_quotes(
+        mfcl_session,
         QUOTE_PER_PAGE,
     )
 
-    result_included = quote_result["included"]
-
-    # 取引先でフィルター
-    # 実行時から40日前までの見積もり一覧を用意する
+    # 取引先、実行時から40日前まででフィルター
     from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
-    result_data = (
+    filtered_by_result = (
         i
         for i in quote_result["data"]
-        if i["attributes"]["department_id"] == MISUMI_TORIHIKISAKI_ID
-        and datetime.fromisoformat(i["attributes"]["created_at"]) > from_date
+        if i["department_id"] == MISUMI_TORIHIKISAKI_ID
+        and datetime.fromisoformat(i["created_at"]) > from_date
     )
 
     # 見積一覧から必要情報を収集
     billing_target_quote_list = []
-    for result_item in result_data:
-        re_id = result_item["relationships"]["items"]["data"][0]["id"]
+    for result_quote in filtered_by_result:
+        # 請求書にある品目の情報を取得する。ひとつのみを想定
+        quote_item = result_quote["items"][0]
 
-        # TODO:2022-11-24 ここ品目（included）が二つ以上あった場合が考慮されていない。基本は一つになるけど
-        # nameと納期が入ってる部分の情報が両者あればそれを拾うでいいかな
-        # 検索方法とヒットしたIDの辞書を取り出すことをしたいけど、いい方法あったけど忘れてる
-        # ref:https://github.com/seratch/jp-holidays-for-slack/blob/main/app/workflow_step.py#L70
-
-        quote_item = next(
-            (included for included in result_included if included.get("id") == re_id),
-            None,
-        )
-
-        # TODO:2022-11-25 個々のdataclassは最後に初期化する
         billing_target_quote = BillingTargetQuote(
-            durarion_src=quote_item["attributes"]["detail"],
-            price=float(result_item["attributes"]["subtotal"]),
-            hinmoku_title=quote_item["attributes"]["name"],
+            durarion_src=quote_item["detail"],
+            price=float(result_quote["subtotal_price"]),
+            hinmoku_title=quote_item["name"],
         )
 
         # 表示用数字とIDリストを作成。
@@ -335,7 +344,6 @@ def main():
         "ガススプリング配管図作製費",
         f"{today_datetime:%Y年%m月}請求分",
     )
-    billing_data_json_data = generate_billing_json_data(billing_data)
 
     # ここで請求書情報を出して、こちらの検証と正しいか確認
     print(
@@ -349,20 +357,22 @@ def main():
     # 確認用に見積書一覧作成か、請求書も生成するか、キャンセルするかの判断
 
     output_select = input(
-        "請求額一覧を確認する？ 全部生成する？ \ncheck/c で一覧の生成, output/o で請求書も生成, 入力無しでキャンセル: "
+        "請求額一覧を確認する？ 全部生成する？ \ncheck/c で一覧の生成, output/o で請求書も生成,入力無しでキャンセル: "
     )
 
     match output_select:
         case "check" | "c":
             # 見積書の一覧だけ作る
-            export_xlsx_path = export_list(filterd_billing_target_quote_list)
+            export_xlsx_path = generate_billing_list_excel(
+                filterd_billing_target_quote_list
+            )
             print(f"一覧のみ生成しました。\nファイルパス:{export_xlsx_path}")
 
         case "output" | "o":
-            export_xlsx_path = export_list(filterd_billing_target_quote_list)
-            billing_pdf_path = generate_invoice(
-                mfcloud_invoice_session, billing_data_json_data
+            export_xlsx_path = generate_billing_list_excel(
+                filterd_billing_target_quote_list
             )
+            billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
             print("一覧と請求書生成しました")
             print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
 

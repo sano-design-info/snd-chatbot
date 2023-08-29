@@ -157,10 +157,10 @@ token.json
 exam
 export_files
 .DS_Store
-access_token.dat
 quote/
 billing/
 debug.log
 config.toml
 dev-config.toml
 google_client_secret.json
+mfcloud_access_token.json

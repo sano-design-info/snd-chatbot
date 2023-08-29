@@ -4,6 +4,7 @@
     // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
     
         {
             "name": "Python: run mail_action",
@@ -21,5 +22,14 @@
             "console": "integratedTerminal",
             "justMyCode": true
         }
+        
+        {
+            "name": "Python: exam_mfcloudv3_oauthlib",
+            "type": "python",
+            "request": "launch",
+            "program": "exam_mfcloudv3_oauthlib.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
     ]
 }
