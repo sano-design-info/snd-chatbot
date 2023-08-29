@@ -139,11 +139,12 @@ def generate_billing_json_data(billing_data: BillingData) -> dict:
     # 各情報を入れる
     billing_data_json["title"] = billing_data.billing_title
     billing_data_json["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
+    
     # due_dateは今月末にする
     # ref: https://zenn.dev/wtkn25/articles/python-relativedelta#%E6%9C%88%E5%88%9D%E3%80%81%E6%9C%88%E6%9C%AB%E3%80%81%E5%85%88%E6%9C%88%E5%88%9D%E3%80%81%E5%85%88%E6%9C%88%E6%9C%AB%E3%80%81%E7%BF%8C%E6%9C%88%E5%88%9D%E3%80%81%E7%BF%8C%E6%9C%88%E6%9C%AB
-    billing_data_json["due_date"] = today_datetime + relativedelta(
+    billing_data_json["due_date"] = (today_datetime + relativedelta(
         months=+1, day=1, days=-1
-    )
+    )).strftime(START_DATE_FORMAT)
     return billing_data_json
 
 
