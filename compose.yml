@@ -19,6 +19,7 @@ services:
         target: /app/m_synology_drive_point
     ports:
       - "18081:18081"
+      - "8080:8080" 
     # 環境変数どうしよう？
     
 volumes:
