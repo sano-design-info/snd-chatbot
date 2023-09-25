@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 
-from run_mail_action import pick_msm_katasiki_by_renrakukoumoku_filename
+from run_mail_action import filter_msm_katasiki_by_filename
 
 
 # pick_msm_katasiki_by_renrakukoumoku_filename のテスト
@@ -20,4 +20,4 @@ from run_mail_action import pick_msm_katasiki_by_renrakukoumoku_filename
 )
 def test_pick_anken_number(target_path, expected):
     # ファイルパスを適当に用意
-    assert pick_msm_katasiki_by_renrakukoumoku_filename(target_path) == expected
+    assert filter_msm_katasiki_by_filename(target_path) == expected

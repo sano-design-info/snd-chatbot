@@ -1,16 +1,17 @@
 # coding: utf-8
 import json
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import questionary
 from dateutil.relativedelta import relativedelta
+from dateutil import parser
 import openpyxl
 from googleapiclient.discovery import build
 from openpyxl.styles import Border, Side
-import api.googleapi
+from api import googleapi
 
 from helper import load_config, EXPORTDIR_PATH
 from api.mfcloud_api import (
@@ -18,7 +19,7 @@ from api.mfcloud_api import (
     download_billing_pdf,
     get_quotes,
     create_item,
-    create_billing,
+    create_invoice_template_billing,
     attach_billingitem_into_billing,
 )
 from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
@@ -42,6 +43,14 @@ BILLING_LIST_EXCELPATH = (
     export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
 )
 
+# API Session
+# TODO:2023-09-19 ここはtry exceptで囲む
+google_cred = googleapi.get_cledential(googleapi.API_SCOPES)
+gmail_service = build("gmail", "v1", credentials=google_cred)
+
+# mfcloudのセッション作成
+mfcl_session = MFCIClient().get_session()
+
 
 def generate_dl_numbers(dl_numbers_str: str) -> list:
     """
@@ -64,36 +73,48 @@ def generate_dl_numbers(dl_numbers_str: str) -> list:
 
 
 @dataclass
-class BillingTargetQuote:
-    only_katasiki: str = field(init=False)
-    durarion: str = field(init=False)
-    # TODO:2023-05-25 durarionは元のstrは残したほうがいいな
+class QuoteData:
+    """
+    見積情報を簡素にまとめたデータ構造
+
+    args:
+        durarion_src: 見積書にある品目の詳細
+        price: 見積書の合計金額
+        hinmoku_title: 見積書にある品目のタイトル
+    """
+
+    # durarionは最初にstrとして取り込んで、クラス生成時に正規表現で綺麗にする
     durarion_src: str = ""
     price: float = 0
     hinmoku_title: str = ""
 
+    only_katasiki: str = field(init=False)
+    durarion: str = field(init=False)
+
     def __post_init__(self):
-        # TODO:2022-11-25 ここは正規表現で取り出したほうが安全かな
         self.only_katasiki = MSM_ANKEN_NUMBER.match(self.hinmoku_title).group(0)
         self.durarion = BILLING_DURARION.match(self.durarion_src).group("durarion")
 
 
 @dataclass
-class BillingData:
+class BillingInfo:
+    """作成する請求書情報のデータ構造"""
+
     price: float
     billing_title: str
     hinmoku_title: str
 
 
-def generate_json_mfci_billing_item(billing_data: BillingData) -> None:
+def generate_json_mfci_billing_item(billing_info: BillingInfo) -> dict:
     """
     請求情報を元に、MFクラウド請求書APIで使う請求書書向け品目用のjson文字列を生成する。
     結果は辞書形式で返す。
     """
+
     item_json_template = """
     {
         "name": "品目",
-        "detail": "詳細",
+        "detail": "",
         "unit": "0",
         "price": 0,
         "quantity": 1,
@@ -105,17 +126,18 @@ def generate_json_mfci_billing_item(billing_data: BillingData) -> None:
     billing_item = json.loads(item_json_template)
 
     # 結果をjsonで返す
-    billing_item["name"] = "{} ガススプリング配管図".format(billing_data.hinmoku_title)
+    billing_item["name"] = "{} ガススプリング配管図".format(billing_info.hinmoku_title)
     billing_item["quantity"] = 1
-    billing_item["price"] = int(billing_data.price)
-    billing_item["name"] = billing_data.hinmoku_title
+    billing_item["price"] = int(billing_info.price)
+    billing_item["name"] = billing_info.hinmoku_title
 
     return billing_item
 
 
-def generate_billing_json_data(billing_data: BillingData) -> dict:
+def generate_billing_info_json(billing_info: BillingInfo) -> dict:
     """
     MFクラウド請求書APIで使う請求書作成のjsonを生成する
+    結果は辞書形式で返す。
     """
 
     billing_json_template = """
@@ -131,34 +153,36 @@ def generate_billing_json_data(billing_data: BillingData) -> dict:
     }
     """
     # jsonでロードする
-    billing_data_json = json.loads(billing_json_template)
+    billing_info_json = json.loads(billing_json_template)
 
     # department_idはミスミのものを利用
-    billing_data_json["department_id"] = MISUMI_TORIHIKISAKI_ID
+    billing_info_json["department_id"] = MISUMI_TORIHIKISAKI_ID
 
     # 各情報を入れる
-    billing_data_json["title"] = billing_data.billing_title
-    billing_data_json["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
-    
+    billing_info_json["title"] = billing_info.billing_title
+    billing_info_json["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
+
     # due_dateは今月末にする
     # ref: https://zenn.dev/wtkn25/articles/python-relativedelta#%E6%9C%88%E5%88%9D%E3%80%81%E6%9C%88%E6%9C%AB%E3%80%81%E5%85%88%E6%9C%88%E5%88%9D%E3%80%81%E5%85%88%E6%9C%88%E6%9C%AB%E3%80%81%E7%BF%8C%E6%9C%88%E5%88%9D%E3%80%81%E7%BF%8C%E6%9C%88%E6%9C%AB
-    billing_data_json["due_date"] = (today_datetime + relativedelta(
-        months=+1, day=1, days=-1
-    )).strftime(START_DATE_FORMAT)
-    return billing_data_json
+    billing_info_json["due_date"] = (
+        today_datetime + relativedelta(months=+1, day=1, days=-1)
+    ).strftime(START_DATE_FORMAT)
+
+    return billing_info_json
 
 
 # 見積書一覧を元にテンプレの行を生成
-def generate_billing_pdf(mfci_session, billing_data: BillingData) -> Path:
+def generate_billing_pdf(mfci_session, billing_info: BillingInfo) -> Path:
     """
     MFクラウド請求書APIを使って請求書を生成する。戻り値はpdfファイルのパス
     """
 
     # 空の請求書作成
-    billing_json_data = generate_billing_json_data(billing_data)
-    billing_res = create_billing(mfci_session, billing_json_data)
+    billing_res = create_invoice_template_billing(
+        mfci_session, generate_billing_info_json(billing_info)
+    )
     # 品目を作成
-    billing_item_data = generate_json_mfci_billing_item(billing_data)
+    billing_item_data = generate_json_mfci_billing_item(billing_info)
     billing_item_res = create_item(mfci_session, billing_item_data)
     # 請求書へ品目を追加する
     attach_billingitem_into_billing(
@@ -202,7 +226,7 @@ def set_border_style(
 
 
 def generate_billing_list_excel(
-    billing_target_quotes: list[BillingTargetQuote],
+    billing_target_quotes: list[QuoteData],
 ) -> Path:
     """
     請求対象一覧をxlsxファイルに出力する
@@ -244,6 +268,53 @@ def generate_billing_list_excel(
     return BILLING_LIST_EXCELPATH
 
 
+def str_to_datetime_with_dateutil(date_str):
+    """
+    日付の文字列 月/日 をdatetimeオブジェクトに変換する。
+    現在の年を考慮して、今年の12月に1月または2月が入っていた場合、来年の1月または2月にする。
+
+    注意:この考慮は少し曖昧で、12月だから1月2月が来年というよりは、現在の月より前の月だから来年という考え方が正しいはず。
+    12月頃に通常発生する自然な表現として採用している。11月に1月2月が入っていたら、といったたらればは今は考えない。
+
+    args:
+        date_str: 日付の文字列 月/日
+    return:
+        datetimeオブジェクト
+    """
+    # 現在の年を取得
+    current_year = datetime.now().year
+
+    # 現在の月を取得
+    current_month = datetime.now().month
+
+    # dateutilを使用して日付文字列からdatetimeオブジェクトを生成
+    # date = datetime.strptime(date_str, "%m/%d")
+    date = parser.parse(date_str)
+
+    # 現在の月が12月で、生成された日付の月が1月または2月の場合、年を+1する
+    if current_month == 12 and (date.month == 1 or date.month == 2):
+        date = date.replace(year=current_year + 1)
+
+    return date
+
+
+def is_target_date(t_date: datetime, start_date: datetime, end_date: datetime) -> bool:
+    """
+    指定した日付が、指定した日付の範囲内にあるかどうかを判定する
+    args:
+        t_date: 判定したい日付
+        start_date: 範囲の開始日:end_dateより手前の日付を検証する
+        end_date: 範囲の終了日
+    return:
+        t_dateがstart_dateとend_dateの間にあるかどうかの真偽値
+    """
+    # start_dateがend_dateより手前か確認する。違ったらエラー:valueerrorを出す
+    if start_date > end_date:
+        raise ValueError("start_dateはend_dateより前にしてください")
+
+    return start_date.date() <= t_date.date() <= end_date.date()
+
+
 # メール下書きを作成する
 def set_draft_mail(attchment_filepaths: list[Path]) -> None:
     """
@@ -260,21 +331,12 @@ def set_draft_mail(attchment_filepaths: list[Path]) -> None:
     mailcc = SCRIPT_CONFIG.get("mail_cc", "")
 
     # メール下書きを作成する
-
-    google_cred = api.googleapi.get_cledential(api.googleapi.API_SCOPES)
-
-    gmail_service = build("gmail", "v1", credentials=google_cred)
-
-    api.googleapi.append_draft(
+    googleapi.append_draft(
         gmail_service, mailto, mailcc, mailtitle, mailbody, attchment_filepaths
     )
 
 
 def main():
-    # mfcloudのセッション作成
-    mfci_cred = MFCIClient()
-    mfcl_session = mfci_cred.get_session()
-
     # 見積書一覧を取得
     quote_result = get_quotes(
         mfcl_session,
@@ -283,7 +345,7 @@ def main():
 
     # 取引先、実行時から40日前まででフィルター
     from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
-    filtered_by_result = (
+    filtered_date_by_quote_result = (
         i
         for i in quote_result["data"]
         if i["department_id"] == MISUMI_TORIHIKISAKI_ID
@@ -291,57 +353,44 @@ def main():
     )
 
     # 見積一覧から必要情報を収集
-    billing_target_quote_list = []
-    for result_quote in filtered_by_result:
-        # 請求書にある品目の情報を取得する。ひとつのみを想定
-        quote_item = result_quote["items"][0]
-
-        billing_target_quote = BillingTargetQuote(
-            durarion_src=quote_item["detail"],
-            price=float(result_quote["subtotal_price"]),
-            hinmoku_title=quote_item["name"],
+    quote_list = [
+        # 品目の最初の1行を使う
+        QuoteData(
+            durarion_src=quote["items"][0]["detail"],
+            price=float(quote["subtotal_price"]),
+            hinmoku_title=quote["items"][0]["name"],
         )
+        for quote in filtered_date_by_quote_result
+    ]
 
-        # 表示用数字とIDリストを作成。
-        billing_target_quote_list.append(billing_target_quote)
+    # questionay.Choiceを使って見積書を選択する。
+    # 納期（duration）を使って複数選択のデフォルト選択をマーク
+    # 期日設定の 毎月26日から1か月前の日付をマーク
+    # 例: 9/26締め切りの場合、8/26をマーク
+    choice_list = []
 
-    # TODO:2022-11-24 個々の情報として、searchで今月+特定の取引先に切り替えて取得するようにした
-    # なので、実行時の見積書作成でのタイミングで請求書を作成するでいいと思う。念のためにサマリーを用意して、結果のExcelファイルだけを生成して、その後請求書作成を行えば安全かな
-
-    # 選んだ見積書をもとに請求書を作成してDLする
-
-    # 見積一覧から請求書作成する部分を範囲指定する
-    for enum, quote_list in enumerate(billing_target_quote_list, start=1):
-        # 表示用にPrintする
-        print(
-            f"{enum:0>2}: {quote_list.only_katasiki} | {quote_list.price} | {quote_list.durarion}"
+    for quotedata in quote_list:
+        # 対象日付の範囲を計算: 今月の26日から1か月前の日付の間か判断してデフォルト選択
+        choice_list.append(
+            questionary.Choice(
+                title=f"{quotedata.only_katasiki} |{quotedata.price} | {quotedata.durarion}",
+                value=quotedata,
+                checked=is_target_date(
+                    str_to_datetime_with_dateutil(quotedata.durarion),
+                    datetime(today_datetime.year, today_datetime.month, 26)
+                    - relativedelta(months=1),
+                    datetime(today_datetime.year, today_datetime.month, 27),
+                ),
+            )
         )
-
-    dl_numbers_str = input(
-        "請求書に合算する見積書を選択してください。すべての場合は'all'か'a'と入れてください。DLしない場合はそのままエンターで終了します 例:1,2,4-6: "
-    )
-
-    # 番号の表記をパースして、変換->DLする
-    if dl_numbers_str == "":
-        print("操作をキャンセルしました。終了します。")
-        sys.exit()
-    if dl_numbers_str in ("all", "a"):
-        dl_numbers_str = ",".join(
-            [str(idx) for idx, _ in enumerate(billing_target_quote_list, start=1)]
-        )
-
-    dl_numbers = generate_dl_numbers(dl_numbers_str)
-
-    print("請求書対象の番号:", dl_numbers)
-
-    filterd_billing_target_quote_list = list(
-        reversed([billing_target_quote_list[i - 1] for i in dl_numbers])
-    )
-    # 請求書対象の指定を元に、見積金額を取り出す
+    # 見積書の一覧を表示して、選択させる
+    ask_choiced_quote_list: list[QuoteData] = questionary.checkbox(
+        "請求書にする見積書を選択してください。", choices=choice_list
+    ).ask()
 
     # 見積書の情報を元に、金額の合計を出す
-    billing_data = BillingData(
-        sum((i.price for i in filterd_billing_target_quote_list)),
+    billing_data = BillingInfo(
+        sum((i.price for i in ask_choiced_quote_list)),
         "ガススプリング配管図作製費",
         f"{today_datetime:%Y年%m月}請求分",
     )
@@ -350,29 +399,28 @@ def main():
     print(
         f"""
     [請求情報]
-    件数: {len(filterd_billing_target_quote_list)}
+    件数: {len(ask_choiced_quote_list)}
     合計金額:{billing_data.price}
     """
     )
 
-    # 確認用に見積書一覧作成か、請求書も生成するか、キャンセルするかの判断
-
-    output_select = input(
-        "請求額一覧を確認する？ 全部生成する？ \ncheck/c で一覧の生成, output/o で請求書も生成,入力無しでキャンセル: "
-    )
+    # 確認用に見積書一覧作成か、請求書も生成するか、キャンセルするかの判断。
+    output_select = questionary.select(
+        "請求額一覧を確認する？ 全部生成する？",
+        choices=[
+            questionary.Choice("請求額一覧を生成する", "check"),
+            questionary.Choice("請求額一覧と請求書を生成する", "output"),
+        ],
+    ).ask()
 
     match output_select:
         case "check" | "c":
             # 見積書の一覧だけ作る
-            export_xlsx_path = generate_billing_list_excel(
-                filterd_billing_target_quote_list
-            )
+            export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
             print(f"一覧のみ生成しました。\nファイルパス:{export_xlsx_path}")
 
         case "output" | "o":
-            export_xlsx_path = generate_billing_list_excel(
-                filterd_billing_target_quote_list
-            )
+            export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
             billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
             print("一覧と請求書生成しました")
             print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")

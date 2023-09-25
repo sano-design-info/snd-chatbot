@@ -1,18 +1,16 @@
 {
-  "billing": {
-    "department_id": "C6Iq5t2NUMCUWCCE0ctwYQ",
-    "billing_date": "2020-05-08",
-    "title": "ガススプリング配管図作製費",
-    "tags": "佐野設計自動生成",
-    "note": "詳細は別添付の明細をご確認ください",
-    "items": [
-      {
-        "name": "2023年05月請求分",
-        "unit_price": 456000,
-        "unit": "",
-        "quantity": 1,
-        "excise": true
-      }
-    ]
-  }
+  "department_id": "C6Iq5t2NUMCUWCCE0ctwYQ",
+  "billing_date": "2020-05-08",
+  "title": "ガススプリング配管図作製費",
+  "tags": "佐野設計自動生成",
+  "note": "詳細は別添付の明細をご確認ください",
+  "items": [
+    {
+      "name": "2023年05月請求分",
+      "price": 456000,
+      "unit": "",
+      "quantity": 1,
+      "excise": true
+    }
+  ]
 }

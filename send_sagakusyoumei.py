@@ -76,6 +76,7 @@ def main():
     drive_service = build("drive", "v3", credentials=google_cred)
     gmail_service = build("gmail", "v1", credentials=google_cred)
 
+    # TODO:2023-09-14 関数にする
     # 1. 買掛金案内書から、msm側の購入リストの金額を取得
     # headless modeを設定
     webdriver_options = Options()

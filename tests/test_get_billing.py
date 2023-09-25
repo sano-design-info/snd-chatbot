@@ -29,7 +29,7 @@ def test_BillingTargetQuote(
     excepted_only_katasiki: str,
     excepted_durarion: str,
 ):
-    target = BillingTargetQuote(*quitedata)
+    target = QuoteData(*quitedata)
     assert target.only_katasiki == excepted_only_katasiki
     assert target.durarion == excepted_durarion
 
@@ -50,30 +50,23 @@ def test_generate_billing_json_data(testdata: tuple, expected_jsonpath: str):
         excepted_jsondata = json.load(f)
 
     # 期待値jsonのbilling_dateを今日の日付に変更する
-    excepted_jsondata["billing"]["billing_date"] = today_datetime.strftime(
-        START_DATE_FORMAT
-    )
-    result = generate_billing_json_data(
-        BillingData(testdata[0], "ガススプリング配管図作製費", testdata[1])
+    excepted_jsondata["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
+    result = generate_billing_info_json(
+        BillingInfo(testdata[0], "ガススプリング配管図作製費", testdata[1])
     )
 
-    # 検証をする
-    # TODO:2023-05-25 この検証方法が微妙に感じるので、もっと良い方法を考える
-    # department_id
-    assert (
-        result["billing"]["department_id"]
-        == excepted_jsondata["billing"]["department_id"]
+    assert result["department_id"] == excepted_jsondata["department_id"]
+    assert result["billing_date"] == excepted_jsondata["billing_date"]
+    # item側を生成する
+
+    item_result = generate_json_mfci_billing_item(
+        BillingInfo(testdata[0], "ガススプリング配管図作製費", testdata[1])
     )
+
     # items.name
-    assert (
-        result["billing"]["items"][0]["name"]
-        == excepted_jsondata["billing"]["items"][0]["name"]
-    )
+    assert item_result["name"] == excepted_jsondata["items"][0]["name"]
     # items.unit_price
-    assert (
-        result["billing"]["items"][0]["unit_price"]
-        == excepted_jsondata["billing"]["items"][0]["unit_price"]
-    )
+    assert item_result["price"] == excepted_jsondata["items"][0]["price"]
 
 
 # set_border_style のテスト

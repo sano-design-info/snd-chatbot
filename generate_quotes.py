@@ -12,7 +12,8 @@ import questionary
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-import api.googleapi
+from api import googleapi
+
 from api.mfcloud_api import (
     MFCIClient,
     download_quote_pdf,
@@ -34,7 +35,7 @@ from itemparser import (
 config = load_config.CONFIG
 
 MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
-MITSUMORI_DIR_IDS = config.get("google").get("MITSUMORI_DIR_IDS")
+ESTIMATE_CALCSHEET_DIR_IDS = config.get("google").get("MITSUMORI_DIR_IDS")
 MITSUMORI_RANGES = config["mapping"]
 MOVE_DIR_ID = config.get("google").get("MOVE_DIR_ID")
 
@@ -46,8 +47,20 @@ SCRIPT_CONFIG = config.get("generate_quotes")
 export_qupte_dirpath = EXPORTDIR_PATH / "quote"
 export_qupte_dirpath.mkdir(parents=True, exist_ok=True)
 
+# TODO:2023-09-14 これは使っている部分へ戻す。これ以外で使っていないので、ここで定義する必要はない
 # 2020-01-01 のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
+
+# API Session
+# TODO:2023-09-19 ここはtry exceptで囲む
+# Googleのtokenを用意
+google_cred = googleapi.get_cledential(googleapi.API_SCOPES)
+gdrive_service = build("drive", "v3", credentials=google_cred)
+gmail_service = build("gmail", "v1", credentials=google_cred)
+gsheet_service = build("sheets", "v4", credentials=google_cred)
+
+# mfcloudのセッション作成
+mfci_session = MFCIClient().get_session()
 
 
 @dataclass
@@ -148,66 +161,89 @@ class AnkenQuote(EstimateCalcSheetInfo):
         self.mfci_quote_json = quote_data
 
 
+def generate_anken_quote_list(estimate_calcsheets: list[dict]) -> list[AnkenQuote]:
+    """
+    ミスミの配管計算表を元に見積もりを作成するためのAnkenQuoteのリストを作成する
+
+    Args:
+        estimate_calcsheets (list[dict]): ミスミの配管計算表の情報
+    return:
+        list[AnkenQuote]: 見積もりを作成するためのAnkenQuoteのリスト
+    """
+    anken_quotes: list[AnkenQuote] = []
+    for estimate_calcsheet in estimate_calcsheets:
+        anken_quote = AnkenQuote(gsheet_service, estimate_calcsheet.get("id"))
+        anken_quote.calcsheet_parents = estimate_calcsheet.get("parents")
+        # itemをリストアップ
+        anken_quotes.append(anken_quote)
+    return anken_quotes
+
+
+def update_msm_anken_schedule_sheet(
+    anken_quote: AnkenQuote, gsheet_service
+) -> list[dict]:
+    """
+    ミスミのスケジュール表を更新する
+    Args:
+        anken_quote (AnkenQuote): 見積もり情報
+        gsheet_service (googleapiclient.discovery.Resource): Google Sheet APIのサービス
+    return:
+        list[dict]: 更新結果
+    """
+    msmanken_info = MsmAnkenMap(estimate_calcsheet_info=anken_quote)
+    msmankenmaplist = MsmAnkenMapList()
+    msmankenmaplist.msmankenmap_list.append(msmanken_info)
+
+    export_pd = msmankenmaplist.generate_update_sheet_values()
+    before_pd = get_schedule_table_area(table_search_range, gsheet_service)
+    update_data = generate_update_valueranges(table_search_range, before_pd, export_pd)
+
+    print(f"update result:{update_data}")
+
+    return update_schedule_sheet(update_data, gsheet_service)
+
+
 @click.command()
 @click.option("--dry-run", is_flag=True, help="Dry Run Flag")
 def main(dry_run):
-    # Googleのtokenを用意
-    google_cred = api.googleapi.get_cledential(api.googleapi.API_SCOPES)
-    gdrive_serivice = build("drive", "v3", credentials=google_cred)
-    gmail_service = build("gmail", "v1", credentials=google_cred)
-    sheet_service = build("sheets", "v4", credentials=google_cred)
-    # 一連の操作中に使うデータ構造を入れるリスト（グループ化はメール生成時に行う）
-    anken_quotes: list[AnkenQuote] = []
-
-    # mfcloudのセッション作成
-    mfci_cred = MFCIClient()
-    mfci_session = mfci_cred.get_session()
-
     # google sheetのリストを取得
-    googledrive_search_target_mimetype = "application/vnd.google-apps.spreadsheet"
     # - 特定のフォルダ（GSheet的にはグループ）の一覧を取得
-
-    # テンプレフォルダ内もフィルターにいれる。その時にテンプレートは除外する
-    dir_ids_query = " or ".join((f"'{id}' in parents " for id in MITSUMORI_DIR_IDS))
-    # TODO: 2023-04-20ここの検索もgoogleapiのhelperに移動したい
-    try:
-        contain_mitumori_folder_query = f"""
-        ({dir_ids_query})
-        and mimeType = '{googledrive_search_target_mimetype}'
+    # - テンプレフォルダ内もフィルターにいれる。その時にテンプレートは除外する
+    query_by_estimate_calcsheet = f"""
+        ({" or ".join((f"'{id}' in parents " for id in ESTIMATE_CALCSHEET_DIR_IDS))})
+        and mimeType = 'application/vnd.google-apps.spreadsheet'
         and trashed = false
         and name != "ミスミ配管図見積り計算表v2_MA-[ミスミ型番]"
-        """
+    """
 
-        mitumori_sheet_list = (
-            gdrive_serivice.files()
-            .list(
-                q=contain_mitumori_folder_query,
-                pageSize=10,
-                fields="nextPageToken, files(id, name, parents)",
+    try:
+        estimate_calcsheet_list = list(
+            reversed(
+                googleapi.get_file_list(
+                    gdrive_service,
+                    query_by_estimate_calcsheet,
+                    page_size=10,
+                    fields="files(id, name, parents)",
+                ).get("files", [])
             )
-            .execute()
         )
-        # 取得結果を反転させる。順番を作成順にしたほうがわかりやすい
-        target_items = list(reversed(mitumori_sheet_list.get("files", [])))
 
     except HttpError as error:
         sys.exit(f"Google Drive APIのエラーが発生しました。: {error}")
 
-    if not target_items:
+    if not estimate_calcsheet_list:
         print("見積もり計算表が見つかりませんでした。終了します。")
         sys.exit(0)
 
     # TODO:2023-04-19 ここのnameはスプレッドシートの名称ではなくて案件番号にする方がいい。
+    # TODO:2023-09-14 ここは名称のみの指定がいいかな。タスクで型式を渡す方がいいかも
 
     # 一覧から該当する見積もり計算表を取得
     selected_estimate_calcsheets = questionary.checkbox(
         "見積もりを作成する見積もり計算表を選択してください。",
         choices=[
-            {
-                "name": f"{index:0>2}: {mitsumori_gsheet.get('name')}",
-                "value": mitsumori_gsheet,
-            }
-            for index, mitsumori_gsheet in enumerate(target_items, 1)
+            questionary.Choice(title=estimate_gsheet.get("name"), value=estimate_gsheet)
+            for estimate_gsheet in estimate_calcsheet_list
         ],
     ).ask()
 
@@ -216,19 +252,26 @@ def main(dry_run):
         print("操作をキャンセルしました。終了します。")
         sys.exit(0)
 
-    # MFクラウドの見積書jsonデータを作成させて関連結果含めてQuoteItemに入れる
-    for estimate_calcsheet in selected_estimate_calcsheets:
-        anken_quote = AnkenQuote(sheet_service, estimate_calcsheet.get("id"))
-        anken_quote.calcsheet_parents = estimate_calcsheet.get("parents")
-        # サマリーを表示する
-        anken_quote.print_quote_info()
-        # itemをリストアップ
-        anken_quotes.append(anken_quote)
+    # TODO:2023-09-14 ここは関数として切り出す
 
+    # 一連の操作中に使うデータ構造を入れるリスト（グループ化はメール生成時に行う）
+    anken_quotes: list[AnkenQuote] = generate_anken_quote_list(
+        selected_estimate_calcsheets
+    )
     # dry-runはここまで。dry-runは結果をjsonで返す。
     if dry_run:
-        print("[dry run]json dump:")
-        pprint(anken_quotes)
+        print("[dry run]anken_quotes dump:")
+        # anken_number, duration, price
+        pprint(
+            [
+                (
+                    anken_quote.anken_number,
+                    anken_quote.duration.date(),
+                    anken_quote.price,
+                )
+                for anken_quote in anken_quotes
+            ]
+        )
         sys.exit(0)
 
     # MFクラウドで見積書作成
@@ -240,8 +283,8 @@ def main(dry_run):
         )
         # 空の見積書作成
         created_quote_result = create_quote(mfci_session, anken_quote.mfci_quote_json)
+
         # 最後に品目を見積書へ追加
-        print(created_quote_result)
         attach_item_into_quote(
             mfci_session,
             created_quote_result["id"],
@@ -270,38 +313,40 @@ def main(dry_run):
         try:
             previous_parents = ",".join(anken_quote.calcsheet_parents)
 
-            _ = (
-                gdrive_serivice.files()
-                .update(
-                    fileId=anken_quote.calcsheet_source,
-                    addParents=MOVE_DIR_ID,
-                    removeParents=previous_parents,
-                    fields="id, parents",
-                )
-                .execute()
+            _ = googleapi.update_file(
+                gdrive_service,
+                file_id=anken_quote.calcsheet_source,
+                add_parents=MOVE_DIR_ID,
+                remove_parents=previous_parents,
+                fields="id, parents",
             )
 
         except HttpError as error:
             sys.exit(f"スプレッドシート移動時にエラーが発生しました: {error}")
 
         # スケジュール表の該当行に価格や納期を追加する
-        msmanken_info = MsmAnkenMap(estimate_calcsheet_info=anken_quote)
-        msmankenmaplist = MsmAnkenMapList()
-        msmankenmaplist.msmankenmap_list.append(msmanken_info)
-
-        export_pd = msmankenmaplist.generate_update_sheet_values()
-        before_pd = get_schedule_table_area(table_search_range, sheet_service)
-        update_data = generate_update_valueranges(
-            table_search_range, before_pd, export_pd
-        )
-        print(f"update result:{update_data}")
-
-        update_schedule_sheet(update_data, sheet_service)
+        update_msm_anken_schedule_sheet(anken_quote, gsheet_service)
 
     # メールの下書きを生成。案件のベース番号をもとにグルーピングをして一つのメールに複数の見積を添付する
     quote_groups = itertools.groupby(anken_quotes, lambda x: x.anken_base_number)
 
     for group_key, quote_iter in quote_groups:
+        # メールのスレッドを取得して、スレッドに返信する
+        threads = googleapi.search_threads(
+            gmail_service, f"label:snd-ミスミ (*{group_key}*)"
+        )
+        # スレッドが見つからない場合は終了
+        if not threads:
+            sys.exit("スレッドが見つかりませんでした。メール返信作成を中止します。")
+
+        # TODO:2023-04-18 ここは複数スレッドがあった場合は選択制にする。
+        # 出ない場合は一番上のものを使いますと、タイトルを出して確認させる。
+        # メッセージが大抵一つだが、一番上を取り出す（一番上が最新のはず）
+        message = googleapi.get_messages_by_threadid(
+            gmail_service, threads[0].get("id", "")
+        )[0]
+
+        # メールの必要な情報を生成する
         # quote_itemsをlistに変換する
         anken_quotes = list(quote_iter)
 
@@ -312,23 +357,9 @@ def main(dry_run):
             "{{nouki}}", anken_quotes[0].duration_str
         )
 
-        # メールのスレッドを取得して、スレッドに返信する
-        searchquery = f"label:snd-ミスミ (*{group_key}*)"
-
-        threads = api.googleapi.search_threads(gmail_service, searchquery)
-        if not threads:
-            sys.exit("スレッドが見つかりませんでした。メール返信作成を中止します。")
-
-        # TODO:2023-04-18 ここは複数スレッドがあった場合は選択制にする。
-        # 出ない場合は一番上のものを使いますと、タイトルを出して確認させる。
-        # メッセージが大抵一つだが、一番上を取り出す（一番上が最新のはず）
-        message = api.googleapi.get_messages_by_threadid(
-            gmail_service, threads[0].get("id", "")
-        )[0]
-
         # 返信メッセージで下書きを生成
         print(
-            api.googleapi.append_draft_in_thread(
+            googleapi.append_draft_in_thread(
                 gmail_service,
                 replybody,
                 (quote_item.estimate_pdf_path for quote_item in anken_quotes),

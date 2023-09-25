@@ -8,7 +8,7 @@ import dateutil.parser
 import dateutil.tz
 import openpyxl
 import pandas
-from googleapiclient.discovery import Resource, build
+from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
 
 from helper import decode_base64url, load_config, rangeconvert
@@ -77,11 +77,13 @@ class ExpandedMessageItem:
             ).get("value")
         )
 
+        # TODO:2023-09-22
+        # メールで使うbodyの部分は、htmlとplainがあるが、何方もstrで保存されるような構造にする
+        # また、imgファイルの収集も行うこと。imgファイルはbase64で保存されているので、decodeしておく
+
         # メールのmimeマルチパートを考慮して、構造が違うモノに対応する
         # メールがリッチテキストかつimgファイルがある場合は、multipart/relatedとなり、body_relatedを入れるとimgファイル収集も可能なので、別で用意している
         self.body_related = {}
-
-        # ここはtext plane or multipart/altanative or multipart/related >  multipart/altanative の構造になってるらしいので、分離した処理に切り替えないといけない
 
         # partsがない場合 = シンプルなテキストベースの場合
         if not self.payload.get("parts"):
@@ -94,6 +96,7 @@ class ExpandedMessageItem:
                 if i.get("partId") in ("0")
             )
 
+            # body_partsを取得する。mimeTypeによって構造が違うので、それぞれの場合で処理を変える
             match mail_part_mimetype:
                 case "text/plain":
                     self.body_parts = self.payload.get("parts")
@@ -132,7 +135,13 @@ class ExpandedMessageItem:
                 if "text/plain" in i.get("mimeType")
             )
         )
+
+        # TODO:2023-09-21 これは使われているのかいまいちわからなかった。bodyはstrが望ましい。
+        # htmlとplane両方ある場合、planeはそのまま。htmlはhtml2textで変換する
         self.body = decode_base64url(mailbody).decode("utf8")
+
+        # TODO:2023-09-22
+        # 添付ファイルの収集もここで行う。添付ファイルはGmail API経由でDLが必要になるので、ここでは行わない
 
 
 @dataclass
