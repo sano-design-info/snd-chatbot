@@ -6,7 +6,6 @@ from pathlib import Path
 
 import copier
 import openpyxl
-import questionary
 from bs4 import BeautifulSoup
 from dateutil.relativedelta import relativedelta
 from google.oauth2.credentials import Credentials
@@ -15,14 +14,21 @@ from googleapiclient.errors import HttpError
 from jinja2 import Environment, FileSystemLoader
 
 from api import googleapi
-from helper import EXPORTDIR_PATH, decode_base64url, load_config, extract_compressfile
+from helper import (
+    EXPORTDIR_PATH,
+    ROOTDIR,
+    decode_base64url,
+    load_config,
+    extract_compressfile,
+)
 from helper.regexpatterns import MSM_ANKEN_NUMBER
 
 from itemparser import ExpandedMessageItem
 
+from task import BaseTask, ProcessData
 
-# generate Path
-parent_dirpath = Path(__file__).parents[0]
+# # generate Path
+# parent_dirpath = Path(__file__).parents[0]
 exportfiles_dirpath = (
     EXPORTDIR_PATH
     / "export_files"
@@ -88,7 +94,7 @@ def generate_mail_printhtml(
     # jinja2埋込
     # テンプレート読み込み
     env = Environment(
-        loader=FileSystemLoader(str((parent_dirpath / "itemparser")), encoding="utf8")
+        loader=FileSystemLoader(str((ROOTDIR / "itemparser")), encoding="utf8")
     )
     tmpl = env.get_template("export.html.jinja")
 
@@ -375,169 +381,126 @@ def copy_projectdir(export_path: Path) -> None:
     )
 
 
-def main() -> None:
-    print("[Start Process...]")
+class PrepareTask(BaseTask):
+    def execute_task(self):
+        messages: list[ExpandedMessageItem] = []
+        try:
+            # Call the Gmail API
 
-    messages: list[ExpandedMessageItem] = []
-    try:
-        # Call the Gmail API
+            # 該当メールのスレッド検索
+            threads = googleapi.search_threads(gmail_service, "label:snd-ミスミ (*MA-*)")
 
-        # 該当メールのスレッド検索
-        threads = googleapi.search_threads(gmail_service, "label:snd-ミスミ (*MA-*)")
+            # 上位10件のスレッド -> メッセージを取得。
+            # スレッドに紐づきが2件ぐらいのメッセージの部分でのもので十分かな
+            if threads:
+                top_threads = list(itertools.islice(threads, 0, 10))
+                for thread in top_threads:
+                    # threadsのid = threadsの一番最初のmessage>idなので、そのまま使う
+                    message_id = thread.get("id", "")
 
-        # 上位10件のスレッド -> メッセージを取得。
-        # スレッドに紐づきが2件ぐらいのメッセージの部分でのもので十分かな
-        if threads:
-            top_threads = list(itertools.islice(threads, 0, 10))
-            for thread in top_threads:
-                # threadsのid = threadsの一番最初のmessage>idなので、そのまま使う
-                message_id = thread.get("id", "")
-
-                # スレッドの数が2以上 = すでに納品済みと思われるので削る。
-                # TODO:2022-12-09 ここは2件以上でもまだやり取り中だったりする場合もあるので悩ましい
-                # （数見るだけでもいいかもしれない
-                thread_result = googleapi.get_thread_by_message_id(
-                    gmail_service, message_id, user_id=target_userid, fields="messages"
-                )
-
-                if len(thread_result.get("messages")) <= 2:
-                    # スレッドの一番先頭にあるメッセージを取得する
-                    messages.append(
-                        ExpandedMessageItem(
-                            gmail_message=thread_result.get("messages")[0]
-                        )
+                    # スレッドの数が2以上 = すでに納品済みと思われるので削る。
+                    # TODO:2022-12-09 ここは2件以上でもまだやり取り中だったりする場合もあるので悩ましい
+                    # （数見るだけでもいいかもしれない
+                    thread_result = googleapi.get_thread_by_message_id(
+                        gmail_service,
+                        message_id,
+                        user_id=target_userid,
+                        fields="messages",
                     )
 
-    except HttpError as error:
-        # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
-        print(f"[search thread] An error occurred: {error}")
-        exit()
+                    if len(thread_result.get("messages")) <= 2:
+                        # スレッドの一番先頭にあるメッセージを取得する
+                        messages.append(
+                            ExpandedMessageItem(
+                                gmail_message=thread_result.get("messages")[0]
+                            )
+                        )
 
-    if not messages:
-        print("cant find messages...")
-        exit()
+        except HttpError as error:
+            # TODO:2022-12-09 エラーハンドリングは基本行わずここで落とすこと
+            print(f"[search thread] An error occurred: {error}")
+            exit()
 
-    # 取得が面倒なので最初から必要な値を取り出す
-    message_item_and_labels = []
-    for message in messages:
-        # 送信日, タイトル
-        choice_label = [
-            ("class:text", f"{message.datetime_}"),
-            ("class:highlighted", f"{message.title}"),
-        ]
-        message_item_and_labels.append(
-            questionary.Choice(title=choice_label, value=message)
+        if not messages:
+            print("cant find messages...")
+            exit()
+
+        return messages
+
+
+class MainTask(BaseTask):
+    def execute_task(self, process_data: ProcessData | None = None) -> dict | str:
+        selected_message = process_data["task_data"].get("selected_message")
+        ask_generate_projectfile = process_data["task_data"].get(
+            "ask_generate_projectfile"
         )
 
-    # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
-    print("[Select Mail...]")
+        ask_add_schedule_and_generate_estimate_calcsheet = process_data[
+            "task_data"
+        ].get("ask_add_schedule_and_generate_estimate_calcsheet")
 
-    # TODO:2023-09-14 タスク実行のために、ExmandedMessageItemを渡さないようにする。
-
-    selected_message: ExpandedMessageItem = questionary.select(
-        "メールの選択をしてください", choices=message_item_and_labels
-    ).ask()
-
-    # このタイミングでメール選択がされていなければ終了
-    if not selected_message:
-        print("[Cancell Process...]")
-        exit()
-
-    # その他質問を確認
-    ask_generate_projectfile = questionary.confirm(
-        "プロジェクトファイルを生成しますか？(修正案件の場合は作成しないこと 例: MA-0000-1)", True
-    ).ask()
-
-    if not ask_generate_projectfile:
-        print("[Cancell Process...]")
-        exit()
-
-    ask_add_schedule_and_generate_estimate_calcsheet = questionary.confirm(
-        "スケジュール表追加と見積計算表の作成を行いますか？（プロジェクトファイル再作成時はFalseで）", True
-    ).ask()
-
-    # スキップする場合、↑の質問がFalseになる場合
-    ask_add_schedule_nextmonth = (
-        questionary.confirm("スケジュール表追加時に入金日を予定月の来月にしますか？", False)
-        .skip_if(
-            ask_add_schedule_and_generate_estimate_calcsheet is False, default=False
+        ask_add_schedule_nextmonth = process_data["task_data"].get(
+            "ask_add_schedule_nextmonth"
         )
-        .ask()
-    )
+        print("[Generate Dirs...]")
+        generate_dirs()
 
-    # 選択後、処理開始していいか問い合わせして実行
-    comefirm_check = questionary.confirm("run Process?", False).ask()
+        print("[Save Attachment file and mail image]")
 
-    if not comefirm_check:
-        print("[Cancell Process...]")
-        exit()
+        # TODO:2023-09-14 ここはExpandedMessageItemへ移動する。
+        # メール本文にimgファイルがある場合はそれを取り出す
+        # multipart/relatedの時にあるので、それを狙い撃ちで取る
 
-    print("[Generate Dirs...]")
-    generate_dirs()
-
-    print("[Save Attachment file and mail image]")
-
-    # TODO:2023-09-14 ここはExpandedMessageItemへ移動する。
-    # メール本文にimgファイルがある場合はそれを取り出す
-    # multipart/relatedの時にあるので、それを狙い撃ちで取る
-
-    if selected_message.body_related:
-        message_imgs = [
+        if selected_message.body_related:
+            message_imgs = [
+                i
+                for i in selected_message.body_related.get("parts")
+                if "image" in i.get("mimeType")
+            ]
+            for msg_img in message_imgs:
+                googleapi.save_attachment_file(
+                    gmail_service,
+                    selected_message.id,
+                    msg_img.get("body").get("attachmentId"),
+                    attachment_dirpath / msg_img.get("filename"),
+                )
+        # 添付ファイルの保持
+        message_attachmentfiles = [
             i
-            for i in selected_message.body_related.get("parts")
-            if "image" in i.get("mimeType")
+            for i in selected_message.payload.get("parts")
+            if "application" in i.get("mimeType")
         ]
-        for msg_img in message_imgs:
+
+        for msg_attach in message_attachmentfiles:
             googleapi.save_attachment_file(
                 gmail_service,
                 selected_message.id,
-                msg_img.get("body").get("attachmentId"),
-                attachment_dirpath / msg_img.get("filename"),
+                msg_attach.get("body").get("attachmentId"),
+                attachment_dirpath / msg_attach.get("filename"),
             )
-    # 添付ファイルの保持
-    message_attachmentfiles = [
-        i
-        for i in selected_message.payload.get("parts")
-        if "application" in i.get("mimeType")
-    ]
 
-    for msg_attach in message_attachmentfiles:
-        googleapi.save_attachment_file(
-            gmail_service,
-            selected_message.id,
-            msg_attach.get("body").get("attachmentId"),
-            attachment_dirpath / msg_attach.get("filename"),
-        )
+        print("[Generate Mail Printable PDF]")
+        generate_mail_printhtml(selected_message, attachment_dirpath)
 
-    # 各種機能を呼び出す
+        print("[Generate Excel Printable PDF]")
+        generate_pdf_by_renrakukoumoku_excel(attachment_dirpath)
 
-    print("[Generate Mail Printable PDF]")
-    generate_mail_printhtml(selected_message, attachment_dirpath)
+        if ask_generate_projectfile:
+            print("[Generate template dirs]")
+            generate_projectdir(attachment_dirpath, exportfiles_dirpath)
 
-    print("[Generate Excel Printable PDF]")
-    generate_pdf_by_renrakukoumoku_excel(attachment_dirpath)
+            print("[copy project dir]")
+            copy_projectdir(exportfiles_dirpath)
+        else:
+            print("[Not Generate template dirs]")
 
-    if ask_generate_projectfile:
-        print("[Generate template dirs]")
-        generate_projectdir(attachment_dirpath, exportfiles_dirpath)
+        if ask_add_schedule_and_generate_estimate_calcsheet:
+            add_schedule_spreadsheet(attachment_dirpath, ask_add_schedule_nextmonth)
 
-        print("[copy project dir]")
-        copy_projectdir(exportfiles_dirpath)
-    else:
-        print("[Not Generate template dirs]")
+            print("[add estimate calcsheet]")
+            generate_estimate_calcsheet(attachment_dirpath)
 
-    if ask_add_schedule_and_generate_estimate_calcsheet:
-        print("[append schedule]")
-        add_schedule_spreadsheet(attachment_dirpath, ask_add_schedule_nextmonth)
+        else:
+            print("[Not Add Scuedule, Generate estimate calcsheet]")
 
-        print("[add estimate calcsheet]")
-        generate_estimate_calcsheet(attachment_dirpath)
-    else:
-        print("[Not Add Scuedule, Generate estimate calcsheet]")
-
-    print("[End Process...]")
-    exit()
-
-
-if __name__ == "__main__":
-    main()
+        return "task end"

@@ -31,26 +31,9 @@ services:
     environment:
       RQ_REDIS_URL: redis://redis
     volumes:
-      - type: volume
-        source: exportdir
-        target: /app/exportdir
-      - type: volume
-        source: synology_drive_point
-        target: /app/m_synology_drive_point
+      - type: bind
+        source: ./
+        target: /app
     ports:
-      - "18081:18081"
-      - "8080:8080"
-    
-volumes:
-  exportdir:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=192.168.35.18,rw
-      device: ":/volume1/msm-gas-prepare-dktest/"
-  synology_drive_point:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=192.168.35.18,rw
-      device: ":/volume1/sny-workdir/作業用共有フォルダ/"
+      - '18081:18081'
+      - '8080:8080'

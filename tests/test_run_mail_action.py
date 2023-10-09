@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 
-from run_mail_action import filter_msm_katasiki_by_filename
+from task.run_mail_action import filter_msm_katasiki_by_filename
 
 
 # pick_msm_katasiki_by_renrakukoumoku_filename のテスト

@@ -25,6 +25,8 @@ colorama = "*"
 authlib = "*"
 cryptography = "*"
 cffi = "*"
+rq = "*"
+redis = "*"
 
 [dev-packages]
 black = "*"

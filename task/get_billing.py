@@ -1,11 +1,9 @@
-# coding: utf-8
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import questionary
 from dateutil.relativedelta import relativedelta
 from dateutil import parser
 import openpyxl
@@ -13,7 +11,7 @@ from googleapiclient.discovery import build
 from openpyxl.styles import Border, Side
 from api import googleapi
 
-from helper import load_config, EXPORTDIR_PATH
+from helper import load_config, ROOTDIR, EXPORTDIR_PATH
 from api.mfcloud_api import (
     MFCIClient,
     download_billing_pdf,
@@ -23,6 +21,7 @@ from api.mfcloud_api import (
     attach_billingitem_into_billing,
 )
 from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
+from task import BaseTask, ProcessData
 
 # `2020-01-01` のフォーマットのみ受け付ける
 START_DATE_FORMAT = "%Y-%m-%d"
@@ -240,10 +239,8 @@ def generate_billing_list_excel(
         "price": 4,
     }
 
-    parent_dirpath = Path(__file__).parents[0]
-
     wb = openpyxl.load_workbook(
-        str((parent_dirpath / "itemparser/billing_list_template.xlsx"))
+        str((ROOTDIR / "itemparser/billing_list_template.xlsx"))
     )
     ws = wb.active
 
@@ -336,100 +333,65 @@ def set_draft_mail(attchment_filepaths: list[Path]) -> None:
     )
 
 
-def main():
-    # 見積書一覧を取得
-    quote_result = get_quotes(
-        mfcl_session,
-        QUOTE_PER_PAGE,
-    )
-
-    # 取引先、実行時から40日前まででフィルター
-    from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
-    filtered_date_by_quote_result = (
-        i
-        for i in quote_result["data"]
-        if i["department_id"] == MISUMI_TORIHIKISAKI_ID
-        and datetime.fromisoformat(i["created_at"]) > from_date
-    )
-
-    # 見積一覧から必要情報を収集
-    quote_list = [
-        # 品目の最初の1行を使う
-        QuoteData(
-            durarion_src=quote["items"][0]["detail"],
-            price=float(quote["subtotal_price"]),
-            hinmoku_title=quote["items"][0]["name"],
+class PrepareTask(BaseTask):
+    def execute_task(
+        self, process_data: ProcessData | None = None
+    ) -> list[tuple[QuoteData, bool]]:
+        # 見積書一覧を取得
+        quote_result = get_quotes(
+            mfcl_session,
+            QUOTE_PER_PAGE,
         )
-        for quote in filtered_date_by_quote_result
-    ]
 
-    # questionay.Choiceを使って見積書を選択する。
-    # 納期（duration）を使って複数選択のデフォルト選択をマーク
-    # 期日設定の 毎月26日から1か月前の日付をマーク
-    # 例: 9/26締め切りの場合、8/26をマーク
-    choice_list = []
+        # 取引先、実行時から40日前まででフィルター
+        from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
+        filtered_date_by_quote_result = (
+            i
+            for i in quote_result["data"]
+            if i["department_id"] == MISUMI_TORIHIKISAKI_ID
+            and datetime.fromisoformat(i["created_at"]) > from_date
+        )
 
-    for quotedata in quote_list:
-        # 対象日付の範囲を計算: 今月の26日から1か月前の日付の間か判断してデフォルト選択
-        choice_list.append(
-            questionary.Choice(
-                title=f"{quotedata.only_katasiki} |{quotedata.price} | {quotedata.durarion}",
-                value=quotedata,
-                checked=is_target_date(
+        # 見積一覧から必要情報を収集
+        quote_list = [
+            # 品目の最初の1行を使う
+            QuoteData(
+                durarion_src=quote["items"][0]["detail"],
+                price=float(quote["subtotal_price"]),
+                hinmoku_title=quote["items"][0]["name"],
+            )
+            for quote in filtered_date_by_quote_result
+        ]
+
+        # questionay.Choiceを使って見積書を選択する。
+        # 納期（duration）を使って複数選択のデフォルト選択をマーク
+        # 期日設定の 毎月26日から1か月前の日付をマーク
+        # 例: 9/26締め切りの場合、8/26をマーク
+        # 見積書の一覧を表示して、選択させる
+
+        return [
+            (
+                quotedata,
+                is_target_date(
                     str_to_datetime_with_dateutil(quotedata.durarion),
                     datetime(today_datetime.year, today_datetime.month, 26)
                     - relativedelta(months=1),
                     datetime(today_datetime.year, today_datetime.month, 27),
                 ),
             )
-        )
-    # 見積書の一覧を表示して、選択させる
-    ask_choiced_quote_list: list[QuoteData] = questionary.checkbox(
-        "請求書にする見積書を選択してください。", choices=choice_list
-    ).ask()
-
-    # 見積書の情報を元に、金額の合計を出す
-    billing_data = BillingInfo(
-        sum((i.price for i in ask_choiced_quote_list)),
-        "ガススプリング配管図作製費",
-        f"{today_datetime:%Y年%m月}請求分",
-    )
-
-    # ここで請求書情報を出して、こちらの検証と正しいか確認
-    print(
-        f"""
-    [請求情報]
-    件数: {len(ask_choiced_quote_list)}
-    合計金額:{billing_data.price}
-    """
-    )
-
-    # 確認用に見積書一覧作成か、請求書も生成するか、キャンセルするかの判断。
-    output_select = questionary.select(
-        "請求額一覧を確認する？ 全部生成する？",
-        choices=[
-            questionary.Choice("請求額一覧を生成する", "check"),
-            questionary.Choice("請求額一覧と請求書を生成する", "output"),
-        ],
-    ).ask()
-
-    match output_select:
-        case "check" | "c":
-            # 見積書の一覧だけ作る
-            export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
-            print(f"一覧のみ生成しました。\nファイルパス:{export_xlsx_path}")
-
-        case "output" | "o":
-            export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
-            billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
-            print("一覧と請求書生成しました")
-            print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
-
-            set_draft_mail([export_xlsx_path, billing_pdf_path])
-            print("メールの下書きを作成しました")
-        case _:
-            print("キャンセルしました")
+            for quotedata in quote_list
+        ]
 
 
-if __name__ == "__main__":
-    main()
+class MainTask(BaseTask):
+    def execute_task(self, process_data: ProcessData | None = None) -> dict | str:
+        ask_choiced_quote_list = process_data["task_data"].get("choiced_quote_id")
+        billing_data = process_data["task_data"].get("billing_data")
+
+        export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
+        billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
+        print("一覧と請求書生成しました")
+        print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
+
+        set_draft_mail([export_xlsx_path, billing_pdf_path])
+        return "メールの下書きを作成しました"
