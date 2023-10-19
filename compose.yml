@@ -19,7 +19,12 @@ services:
       RQ_REDIS_URL: redis://redis
     command: rq worker
     volumes:
-      - .:/app
+      - type: volume
+        source: exportdir
+        target: /app/exportdir
+      - type: volume
+        source: synology_drive_point
+        target: /app/m_synology_drive_point
     working_dir: /app
   app:
     # macOS用
