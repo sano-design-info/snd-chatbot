@@ -31,6 +31,7 @@ services:
       - worker
     restart: always
     tty: true
+    command: python chatapp.py
     environment:
       RQ_REDIS_URL: redis://redis
     volumes:
