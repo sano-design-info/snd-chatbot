@@ -15,7 +15,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
 from api import googleapi, mfcloud_api
-from helper import EXPORTDIR_PATH, extract_compressfile, load_config
+import chat.card
+from helper import EXPORTDIR_PATH, extract_compressfile, load_config, chatcard
 from task import BaseTask
 
 # 認証情報をtomlファイルから読み込む
@@ -58,6 +59,16 @@ sheet_service = build("sheets", "v4", credentials=google_cred)
 drive_service = build("drive", "v3", credentials=google_cred)
 gmail_service = build("gmail", "v1", credentials=google_cred)
 
+# chat
+google_sa_cred: Credentials = googleapi.get_cledential_by_serviceaccount(
+    googleapi.CHAT_API_SCOPES
+)
+chat_service = build("chat", "v1", credentials=google_sa_cred)
+
+# TODO:2023-10-12 ここはconfigに入れる
+spacename = config.get("google").get("CHAT_SPACENAME")
+bot_header = chatcard.bot_header
+
 
 def extract_total_amount(text: str) -> int | None:
     """
@@ -77,7 +88,6 @@ def extract_total_amount(text: str) -> int | None:
 
 class ScriptTask(BaseTask):
     def execute_task(self, process_data: dict | None = None) -> dict | str:
-        # TODO:2023-09-14 関数にする
         # 1. 買掛金案内書から、msm側の購入リストの金額を取得
         # headless modeを設定
         webdriver_options = Options()
@@ -265,7 +275,21 @@ class ScriptTask(BaseTask):
             mail_body,
             [EXPORT_DIR / f"{sagakusyoumei_new_name}.pdf"],
         )
-        result_data = {"text": f"メールの下書きを作成しました: {result_res.get('id')}"}
+        result_data = {
+            "text": f"差額証明書送付用のメールの下書きを作成しました: メールのID {result_res.get('id')}"
+        }
 
-        self.send_message(result_data)
         return {"result": result_data}
+
+    def execute_task_by_chat(self, process_data: dict | None = None) -> dict:
+        result = self.execute_task(process_data)
+
+        # チャット用のメッセージを作成する
+        send_message_body = chat.card.create_card(
+            "result_card__run_mail_action",
+            header=bot_header,
+            widgets=[
+                chat.card.genwidget_textparagraph(result["result"]["text"]),
+            ],
+        )
+        return googleapi.create_chat_message(chat_service, spacename, send_message_body)

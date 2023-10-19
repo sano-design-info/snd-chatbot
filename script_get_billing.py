@@ -41,17 +41,8 @@ def main():
         "請求書にする見積書を選択してください。", choices=choice_list
     ).ask()
 
-    # TODO:2023-10-09 [chat end]: 渡すデータ: 見積もりの取得ID一覧（taskでidでg
-    # etしてくる）, billing_dataのdictフォーマット
-    # これもタスクにするか、そのままこれで動かすかは決める。
-    # タスクのほうがchat側へ結果を渡しやすいからいいかも
-
     # 見積書の情報を元に、金額の合計を出す
-    billing_data = get_billing.BillingInfo(
-        sum((i.price for i in ask_choiced_quote_list)),
-        "ガススプリング配管図作製費",
-        f"{today_datetime:%Y年%m月}請求分",
-    )
+    billing_data = get_billing.generate_billing_data(ask_choiced_quote_list)
 
     # ここで請求書情報を出して、こちらの検証と正しいか確認
     print(
@@ -63,22 +54,14 @@ def main():
     )
     ask_runtask = questionary.confirm("請求書送付メールを作成しますか？").ask()
 
+    # キャンセルの場合は再度実行とする
     if not ask_runtask:
-        # TODO:2023-10-03 ここは再度実行のために、再びprepareを呼び出す実装にする。再帰関数？
         exit("キャンセルしました。再度実行しなおしてください")
 
-    # TODO:2023-09-28 [chat end]: 渡すデータ:
-    # 見積もりの取得ID一覧（taskでidでgetしてくる->QuoteDataにする？）
-    # -> 今はこれはやらないで、QuoteDataが入ることを想定で良し。
-    # billing_dataのdictフォーマット
-
-    task_data = {
-        "choiced_quote_id": ask_choiced_quote_list,
-        "billing_data": billing_data,
-    }
+    task_data = {"task_data": {"choiced_quote_list": ask_choiced_quote_list}}
 
     main_task = get_billing.MainTask()
-    main_job = queue.enqueue(main_task.execute_task, {"task_data": task_data})
+    main_job = queue.enqueue(main_task.execute_task, task_data)
 
     while True:
         if main_job.result:
@@ -86,7 +69,7 @@ def main():
             break
         time.sleep(1)
 
-    print(main_job.result)
+    print(f"見積書を作成しました。: {main_job.result}")
 
 
 if __name__ == "__main__":

@@ -1,25 +1,26 @@
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
-from dateutil.relativedelta import relativedelta
-from dateutil import parser
 import openpyxl
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
 from googleapiclient.discovery import build
 from openpyxl.styles import Border, Side
-from api import googleapi
+from zoneinfo import ZoneInfo
 
-from helper import load_config, ROOTDIR, EXPORTDIR_PATH
+import chat.card
+from api import googleapi
 from api.mfcloud_api import (
     MFCIClient,
+    attach_billingitem_into_billing,
+    create_invoice_template_billing,
+    create_item,
     download_billing_pdf,
     get_quotes,
-    create_item,
-    create_invoice_template_billing,
-    attach_billingitem_into_billing,
 )
+from helper import EXPORTDIR_PATH, ROOTDIR, chatcard, load_config
 from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
 from task import BaseTask, ProcessData
 
@@ -49,6 +50,13 @@ gmail_service = build("gmail", "v1", credentials=google_cred)
 
 # mfcloudのセッション作成
 mfcl_session = MFCIClient().get_session()
+
+# チャット用の認証情報を取得
+google_sa_cred = googleapi.get_cledential_by_serviceaccount(googleapi.CHAT_API_SCOPES)
+chat_service = build("chat", "v1", credentials=google_sa_cred)
+
+spacename = config.get("google").get("CHAT_SPACENAME")
+bot_header = chatcard.bot_header
 
 
 def generate_dl_numbers(dl_numbers_str: str) -> list:
@@ -80,6 +88,10 @@ class QuoteData:
         durarion_src: 見積書にある品目の詳細
         price: 見積書の合計金額
         hinmoku_title: 見積書にある品目のタイトル
+
+    >>> qdd = {"durarion_src":"納期 10/20", "price":10000, "hinmoku_title":"MA-9901 ガススプリング配管図"}
+    >>> qd = QuoteData(**qdd)
+
     """
 
     # durarionは最初にstrとして取り込んで、クラス生成時に正規表現で綺麗にする
@@ -312,8 +324,30 @@ def is_target_date(t_date: datetime, start_date: datetime, end_date: datetime) -
     return start_date.date() <= t_date.date() <= end_date.date()
 
 
+# 請求書の金額合計のデータを生成する
+# TODO:2023-10-16 count_quoteitemは使わないので、削除する
+def generate_billing_data(
+    quote_checked_list: list[QuoteData],
+) -> BillingInfo:
+    """
+    請求書にする見積書の金額を合計する。
+    表示用に件数とBillingInfoのタプルを返す
+
+    args:
+        quote_checked_list: 請求書にする見積書のリスト
+    return:
+        件数とBillingInfoのタプル
+
+    """
+    return BillingInfo(
+        sum((i.price for i in quote_checked_list)),
+        "ガススプリング配管図作製費",
+        f"{today_datetime:%Y年%m月}請求分",
+    )
+
+
 # メール下書きを作成する
-def set_draft_mail(attchment_filepaths: list[Path]) -> None:
+def set_draft_mail(attchment_filepaths: list[Path]) -> dict:
     """
     タイトルと本文を入力してメール下書きを作成する
     タイトルの例 "2023年03月請求書送付について"
@@ -328,20 +362,22 @@ def set_draft_mail(attchment_filepaths: list[Path]) -> None:
     mailcc = SCRIPT_CONFIG.get("mail_cc", "")
 
     # メール下書きを作成する
-    googleapi.append_draft(
+    return googleapi.append_draft(
         gmail_service, mailto, mailcc, mailtitle, mailbody, attchment_filepaths
     )
 
 
 class PrepareTask(BaseTask):
-    def execute_task(
-        self, process_data: ProcessData | None = None
-    ) -> list[tuple[QuoteData, bool]]:
+    def execute_task(self) -> list[tuple[QuoteData, bool]]:
         # 見積書一覧を取得
         quote_result = get_quotes(
             mfcl_session,
             QUOTE_PER_PAGE,
         )
+
+        # TODO:2023-10-16 [リファクタリング]日付のフィルターと、デフォルトチェックを同時に行うといいかも。
+        # is_target_dateをis_date_rangeに変更する
+        # is_date_rangeのstartとendを単体で取れるようにして、単体の時にはそれ以下、それ以上の判定を行うようにする
 
         # 取引先、実行時から40日前まででフィルター
         from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
@@ -382,16 +418,67 @@ class PrepareTask(BaseTask):
             for quotedata in quote_list
         ]
 
+    def execute_task_by_chat(self):
+        result = self.execute_task()
+        # 選択時のチェックボックス
+        quotelist_checkbox = chat.card.genwidget_checkboxlist(
+            "請求書にする見積書を選択してください。",
+            "quoteitems",
+            [
+                chat.card.SelectionInputItem(
+                    f"{quotedata.only_katasiki} | {quotedata.price} |{quotedata.durarion}",
+                    json.dumps(asdict(quotedata)),
+                    selected=checkbool,
+                )
+                for quotedata, checkbool in result
+            ],
+        )
+        # 設定カードを生成
+        config_body = chat.card.create_card(
+            "config_card__get_billing",
+            header=bot_header,
+            widgets=[
+                quotelist_checkbox,
+                # ボタンを追加
+                chat.card.genwidget_buttonlist(
+                    [
+                        chat.card.gencomponent_button(
+                            "タスク実行確認", "confirm__get_billing"
+                        ),
+                        chat.card.gencomponent_button("キャンセル", "cancel_task"),
+                    ]
+                ),
+            ],
+        )
+        return googleapi.create_chat_message(chat_service, spacename, config_body)
+
 
 class MainTask(BaseTask):
-    def execute_task(self, process_data: ProcessData | None = None) -> dict | str:
-        ask_choiced_quote_list = process_data["task_data"].get("choiced_quote_id")
-        billing_data = process_data["task_data"].get("billing_data")
+    def execute_task(self, process_data: ProcessData | None = None) -> dict:
+        ask_choiced_quote_list = process_data["task_data"].get("choiced_quote_list")
+        billing_data = generate_billing_data(ask_choiced_quote_list)
 
         export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
         billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
         print("一覧と請求書生成しました")
         print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
 
-        set_draft_mail([export_xlsx_path, billing_pdf_path])
-        return "メールの下書きを作成しました"
+        return set_draft_mail([export_xlsx_path, billing_pdf_path])
+
+    # チャット用のタスクメソッド
+    def execute_task_by_chat(
+        self, process_data: ProcessData | None = None
+    ) -> dict | str:
+        result = self.execute_task(process_data)
+        # チャット用のメッセージを作成する
+        send_message_body = chat.card.create_card(
+            "result_card__get_billing",
+            header=bot_header,
+            widgets=[
+                chat.card.genwidget_textparagraph(
+                    f"請求書と請求一覧を作成しました。: {result.get('id')}"
+                ),
+            ],
+        )
+        # send_message_body.update({"actionResponse": {"type": "NEW_MESSAGE"}})
+        return googleapi.create_chat_message(chat_service, spacename, send_message_body)

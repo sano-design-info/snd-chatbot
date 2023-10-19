@@ -4,6 +4,8 @@ services:
     # macOS用
     platform: linux/amd64
     image: redis
+    ports:
+      - '6379:6379'
   worker:
     # macOS用
     platform: linux/amd64
@@ -26,10 +28,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      - redis
+      - worker
     restart: always
     tty: true
     environment:
       RQ_REDIS_URL: redis://redis
+      SESSION_REDIS_URL: redis://redis/10
     volumes:
       - type: bind
         source: ./

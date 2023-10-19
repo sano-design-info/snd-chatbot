@@ -3,10 +3,15 @@ import time
 
 import questionary
 import redis
+from googleapiclient.discovery import build
 from rq import Queue
-from itemparser import ExpandedMessageItem
 
+from api import googleapi
+from itemparser import ExpandedMessageItem
 from task import run_mail_action
+
+google_cred = googleapi.get_cledential(googleapi.API_SCOPES)
+gmail_service = build("gmail", "v1", credentials=google_cred)
 
 
 def main() -> None:
@@ -25,7 +30,7 @@ def main() -> None:
             break
         time.sleep(1)
 
-    messages = prepare_job.result
+    messages: list[ExpandedMessageItem] = prepare_job.result
 
     # 取得が面倒なので最初から必要な値を取り出す
     message_item_and_labels = []
@@ -36,19 +41,18 @@ def main() -> None:
             ("class:highlighted", f"{message.title}"),
         ]
         message_item_and_labels.append(
-            questionary.Choice(title=choice_label, value=message)
+            questionary.Choice(title=choice_label, value=message.id)
         )
 
     # 上位10のスレッドから > メッセージの最初取り出して、その中から選ぶ
     print("[Select Mail...]")
 
-    # TODO:2023-09-14 タスク実行のために、ExmandedMessageItemを渡さないようにする。
-    selected_message: ExpandedMessageItem = questionary.select(
+    selected_message_id: ExpandedMessageItem = questionary.select(
         "メールの選択をしてください", choices=message_item_and_labels
     ).ask()
 
     # このタイミングでメール選択がされていなければ終了
-    if not selected_message:
+    if not selected_message_id:
         print("[Cancell Process...]")
         exit()
 
@@ -81,19 +85,18 @@ def main() -> None:
         print("[Cancell Process...]")
         exit()
 
-    # TODO:2023-09-28 [task start] 選択肢, メールのID
-    # TODO:2023-10-09  今はseleceted_messageにしているが、ここはメールのIDを渡すようにする方がいいかな。
-    # redis側が保持してくれるなら気にしなくてもいいかもだけど
     task_data = {
-        "selected_message": selected_message,
-        "ask_generate_projectfile": ask_generate_projectfile,
-        "ask_add_schedule_and_generate_estimate_calcsheet": ask_add_schedule_and_generate_estimate_calcsheet,
-        "ask_add_schedule_nextmonth": ask_add_schedule_nextmonth,
+        "task_data": {
+            "selected_message_id": selected_message_id,
+            "ask_generate_projectfile": ask_generate_projectfile,
+            "ask_add_schedule_and_generate_estimate_calcsheet": ask_add_schedule_and_generate_estimate_calcsheet,
+            "ask_add_schedule_nextmonth": ask_add_schedule_nextmonth,
+        }
     }
 
     main_task = run_mail_action.MainTask()
 
-    main_job = queue.enqueue(main_task.execute_task, {"task_data": task_data})
+    main_job = queue.enqueue(main_task.execute_task, task_data)
 
     while True:
         if main_job.result:

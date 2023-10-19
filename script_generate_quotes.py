@@ -65,12 +65,10 @@ def main(dry_run):
         print("操作をキャンセルしました。終了します。")
         sys.exit(0)
 
-    # TODO:2023-09-28
-    # ここでのデータのやり取りは、見積もり計算表のIDになるかな。
-    # タスク側はIDを元に再度取得をして処理を行えばいい
+    task_data = {"task_data": {"estimate_calcsheet_list": selected_estimate_calcsheets}}
 
     main_task = generate_quotes.MainTask()
-    main_job = queue.enqueue(main_task.execute_task, selected_estimate_calcsheets)
+    main_job = queue.enqueue(main_task.execute_task, task_data)
 
     while True:
         if main_job.result:

@@ -3,11 +3,12 @@ import io
 import mimetypes
 from email.message import EmailMessage
 from pathlib import Path
+from typing import Mapping
 
 import requests
-
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
@@ -18,12 +19,17 @@ from helper import EXPORTDIR_PATH, load_config
 from itemparser import ExpandedMessageItem
 
 config = load_config.CONFIG
+# TODO:2023-10-10 認証情報のパスはenv側へ移動させるから、os.environ.getで取得するように
+# その時の期待する値はパスとしてみること。余計なパスを追加しない
 cred_filepath = config.get("google").get("CRED_FILEPATH")
 
 # generate Path
 EXPORTDIR_PATH.mkdir(parents=True, exist_ok=True)
 token_save_path = EXPORTDIR_PATH / "google_api_access_token.json"
 cred_json = EXPORTDIR_PATH / cred_filepath
+
+# Chat APIの認証情報
+CHAT_SA_CRED_FILEPATH = Path(config.get("google").get("CHAT_SA_CRED_FILEPATH"))
 
 API_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -34,13 +40,15 @@ API_SCOPES = [
     "https://www.googleapis.com/auth/drive.appdata",
     "https://www.googleapis.com/auth/drive.metadata",
 ]
+CHAT_API_SCOPES = ["https://www.googleapis.com/auth/chat.bot"]
 
 
 def get_cledential(scopes: list[str]) -> Credentials:
     """
-    Google APIの認証情報を取得します。
+    Google APIの認証情報をOAuth2の認証フロー（クライアントシークレット）で取得します。
     既に認証情報があればそれを返します。
-    なければ認証情報を取得し、token.jsonに保存します。
+    リフレッシュトークンに対応しています。
+    なければ認証情報を取得し、google_api_access_token.jsonに保存します。
     args:
         scopes: 認証情報を取得する際に必要なスコープ
     return:
@@ -60,6 +68,26 @@ def get_cledential(scopes: list[str]) -> Credentials:
         with token_save_path.open("w") as token:
             token.write(creds.to_json())
     return creds
+
+
+def get_cledential_by_serviceaccount(scopes: list[str]) -> Credentials:
+    """
+    Google APIの認証情報を取得します。サービスアカウントを利用した場合のみ利用可能です。
+    既に認証情報があればそれを返します。
+    主にGoogle Chat用の認証情報を取得する際に利用します。
+
+    args:
+        scopes: 認証情報を取得する際に必要なスコープ
+    return:
+        認証情報
+    """
+
+    if not CHAT_SA_CRED_FILEPATH.exists():
+        raise FileNotFoundError("サービスアカウントの鍵ファイルがありません。")
+
+    return service_account.Credentials.from_service_account_file(
+        CHAT_SA_CRED_FILEPATH, scopes=scopes
+    )
 
 
 # [Gmail API]
@@ -170,6 +198,21 @@ def get_messages_by_threadid(gmail_service: Resource, thread_id) -> list[dict]:
     except HttpError as error:
         print(f"An error occurred: {error}")
         return []
+
+
+# メッセージIDを元にメッセージをgetする
+def get_message_by_message_id(
+    gmail_service: Resource, message_id: str, user_id: str = "me"
+) -> dict:
+    """
+    Gmail APIを使用して、メッセージIDからメッセージを取得します。
+    args:
+        service: Gmail APIのサービス
+        message_id: メッセージID
+    return:
+        メッセージのdict
+    """
+    return gmail_service.users().messages().get(userId=user_id, id=message_id).execute()
 
 
 def create_messagedata(
@@ -684,8 +727,6 @@ def export_pdf_by_driveexporturl(
                 f.write(chunk)
 
 
-# TODO: 2023-03-30 以降にGoogle APIを操作するヘルパー関数を引越してまとめておく
-
 # [Google Spreadsheet API]
 
 
@@ -721,3 +762,31 @@ def append_sheet(
             insertDataOption=insert_data_option,
         )
     ).execute()
+
+
+# [Google Chat API]
+
+# メッセージ作成
+
+
+def create_chat_message(
+    chat_service: Resource, space_name: str, response: Mapping[str, str]
+) -> dict:
+    """
+    Google Chat APIを使用して、メッセージを作成します。
+    args:
+        service: Chat APIのサービス
+        space: メッセージを送信するスペース
+        text: メッセージ本文
+    return:
+        作成したメッセージの情報
+    """
+    return (
+        chat_service.spaces()
+        .messages()
+        .create(
+            parent=space_name,
+            body=response,
+        )
+        .execute()
+    )

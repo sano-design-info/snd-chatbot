@@ -213,6 +213,10 @@ class CsvFileInfo:
         )
 
 
+# TODO:2023-10-15 このデータクラスをasdictすると、EstimateCalcSheetInfoのgapiのserviseが変換できないと思われる。
+# その時は、dataclass.InitVarを使って、初期化限定変数を作ればいいらしい
+
+
 # TODO:2023-01-12 ここではまだ一括で登録をする作業はできないので、gsheet利用優先で実装中
 @dataclass
 class EstimateCalcSheetInfo:

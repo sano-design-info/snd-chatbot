@@ -27,6 +27,7 @@ cryptography = "*"
 cffi = "*"
 rq = "*"
 redis = "*"
+flask = "*"
 
 [dev-packages]
 black = "*"

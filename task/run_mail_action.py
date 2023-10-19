@@ -13,18 +13,18 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from jinja2 import Environment, FileSystemLoader
 
+import chat.card
 from api import googleapi
 from helper import (
     EXPORTDIR_PATH,
     ROOTDIR,
+    chatcard,
     decode_base64url,
-    load_config,
     extract_compressfile,
+    load_config,
 )
 from helper.regexpatterns import MSM_ANKEN_NUMBER
-
 from itemparser import ExpandedMessageItem
-
 from task import BaseTask, ProcessData
 
 # # generate Path
@@ -54,6 +54,13 @@ google_cred: Credentials = googleapi.get_cledential(GOOGLE_API_SCOPES)
 drive_service = build("drive", "v3", credentials=google_cred)
 sheet_service = build("sheets", "v4", credentials=google_cred)
 gmail_service = build("gmail", "v1", credentials=google_cred)
+
+# チャット用の認証情報を取得
+google_sa_cred = googleapi.get_cledential_by_serviceaccount(googleapi.CHAT_API_SCOPES)
+chat_service = build("chat", "v1", credentials=google_sa_cred)
+
+spacename = config.get("google").get("CHAT_SPACENAME")
+bot_header = chatcard.bot_header
 
 
 def generate_dirs() -> None:
@@ -427,25 +434,89 @@ class PrepareTask(BaseTask):
 
         return messages
 
+    def execute_task_by_chat(self):
+        result = self.execute_task()
+
+        # メール選択用にラジオボタン一覧
+        select_message = chat.card.genwidget_radiobuttonlist(
+            "メールの選択",
+            "selected_message_id",
+            [
+                chat.card.SelectionInputItem(
+                    f"{message.datetime_} {message.title}",
+                    message.id,
+                )
+                for message in result
+            ],
+        )
+
+        # 質問の選択ボタンを(ラジオボタン)を追加
+        generate_setting = chat.card.genwidget_switchlist(
+            "設定",
+            "run_mail_action_settings",
+            [
+                chat.card.SelectionInputItem(
+                    "プロジェクトファイルを生成する",
+                    "ask_generate_projectfile",
+                    True,
+                ),
+                chat.card.SelectionInputItem(
+                    "スケジュール表追加と見積計算表の作成を行う",
+                    "ask_add_schedule_and_generate_estimate_calcsheet",
+                    True,
+                ),
+                chat.card.SelectionInputItem(
+                    "スケジュール表追加時に入金日を予定月の来月にする",
+                    "ask_add_schedule_nextmonth",
+                    False,
+                ),
+            ],
+        )
+
+        # 設定カードを生成
+        config_body = chat.card.create_card(
+            "config_card__run_mail_action",
+            header=bot_header,
+            widgets=[
+                select_message,
+                generate_setting,
+                chat.card.genwidget_buttonlist(
+                    [
+                        chat.card.gencomponent_button(
+                            "タスク実行", "run_task__run_mail_action"
+                        ),
+                        chat.card.gencomponent_button("キャンセル", "cancel_task"),
+                    ]
+                ),
+            ],
+        )
+        # print(config_body)
+        return googleapi.create_chat_message(chat_service, spacename, config_body)
+
 
 class MainTask(BaseTask):
     def execute_task(self, process_data: ProcessData | None = None) -> dict | str:
-        selected_message = process_data["task_data"].get("selected_message")
+        selected_message_id = process_data["task_data"].get("selected_message_id")
         ask_generate_projectfile = process_data["task_data"].get(
-            "ask_generate_projectfile"
+            "ask_generate_projectfile", None
         )
 
         ask_add_schedule_and_generate_estimate_calcsheet = process_data[
             "task_data"
-        ].get("ask_add_schedule_and_generate_estimate_calcsheet")
+        ].get("ask_add_schedule_and_generate_estimate_calcsheet", None)
 
         ask_add_schedule_nextmonth = process_data["task_data"].get(
-            "ask_add_schedule_nextmonth"
+            "ask_add_schedule_nextmonth", None
         )
         print("[Generate Dirs...]")
         generate_dirs()
 
         print("[Save Attachment file and mail image]")
+
+        # message_idをExmpanedMessageItemに変換
+        selected_message = ExpandedMessageItem(
+            googleapi.get_message_by_message_id(gmail_service, selected_message_id)
+        )
 
         # TODO:2023-09-14 ここはExpandedMessageItemへ移動する。
         # メール本文にimgファイルがある場合はそれを取り出す
@@ -503,4 +574,18 @@ class MainTask(BaseTask):
         else:
             print("[Not Add Scuedule, Generate estimate calcsheet]")
 
-        return "task end"
+        return {"id": selected_message_id}
+
+    def execute_task_by_chat(self, process_data: ProcessData | None = None) -> dict:
+        result = self.execute_task(process_data)
+
+        # チャット用のメッセージを作成する
+        send_message_body = chat.card.create_card(
+            "result_card__run_mail_action",
+            header=bot_header,
+            widgets=[
+                chat.card.genwidget_textparagraph(f"メールタスクが完了しました。{result.get('id')}"),
+            ],
+        )
+        # send_message_body.update({"actionResponse": {"type": "NEW_MESSAGE"}})
+        return googleapi.create_chat_message(chat_service, spacename, send_message_body)

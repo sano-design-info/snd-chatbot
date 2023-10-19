@@ -2,6 +2,7 @@
 from typing import Protocol, TypedDict
 
 
+# TODO:2023-10-09　やり取りに使うデータ構造の定義はtypeddictではなくてdataclassを使う
 class ProcessData(TypedDict):
     task_data: dict
 
@@ -12,7 +13,7 @@ class MessageData(TypedDict):
     """
 
     # TODO:2023-09-29 データ構造をつくって、型指定する
-    # 必要なもの: メッセージ本文 or ダイアログのjson
+    # 必要なもの: メッセージ本文 or 設定カードのjson
 
     text: str
     # name: str
@@ -22,7 +23,7 @@ class MessageData(TypedDict):
 
 class DialogMessage(TypedDict):
     """
-    google chatのダイアログメッセージのデータ構造
+    google chatの設定カードメッセージのデータ構造
     """
 
     # TODO:2023-09-29 google chatのドキュメントを見て、必要なものを追加する

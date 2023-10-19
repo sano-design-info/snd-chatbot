@@ -1,6 +1,8 @@
 [google]
 # API利用時の認証のjsonファイル。
 CRED_FILEPATH = "json path"
+CHAT_SA_CRED_FILEPATH = "json path"
+CHAT_SPACENAME = "spaces/[space id]"
 
 # 見積計算表の検索先DIR
 MITSUMORI_DIR_IDS = [""]
@@ -25,8 +27,8 @@ SCHEDULE_SHEET_ID = ""
 TORIHIKISAKI_ID = ""
 
 # 認証情報
-MFCLOUD_CLIENT_ID=""
-MFCLOUD_CLIENT_SECRET=""
+MFCLOUD_CLIENT_ID = ""
+MFCLOUD_CLIENT_SECRET = ""
 
 TORIHIKISAKI_NAME = "（株）ミスミ プレス事業部 自動車型事業チーム"
 QUOTE_PER_PAGE = 100
@@ -49,6 +51,6 @@ body = """
 
 [other]
 # ボイラープレートのローカルパス
-MSM_GAS_BOILERPLATE_PATH=""
+MSM_GAS_BOILERPLATE_PATH = ""
 # run_mail_actionで生成したフォルダのコピー先
 COPY_PROJECT_DIR_DEST_PATH = ""

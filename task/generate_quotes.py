@@ -9,8 +9,7 @@ from pprint import pprint
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from task import BaseTask
-
+import chat.card
 from api import googleapi
 from api.mfcloud_api import (
     MFCIClient,
@@ -19,7 +18,7 @@ from api.mfcloud_api import (
     create_quote,
     download_quote_pdf,
 )
-from helper import EXPORTDIR_PATH, load_config
+from helper import EXPORTDIR_PATH, chatcard, load_config
 from itemparser import (
     EstimateCalcSheetInfo,
     MsmAnkenMap,
@@ -28,6 +27,7 @@ from itemparser import (
     get_schedule_table_area,
     update_schedule_sheet,
 )
+from task import BaseTask, ProcessData
 
 # load config, credential
 config = load_config.CONFIG
@@ -60,7 +60,16 @@ gsheet_service = build("sheets", "v4", credentials=google_cred)
 # mfcloudのセッション作成
 mfci_session = MFCIClient().get_session()
 
+# チャット用の認証情報を取得
+google_sa_cred = googleapi.get_cledential_by_serviceaccount(googleapi.CHAT_API_SCOPES)
+chat_service = build("chat", "v1", credentials=google_sa_cred)
 
+spacename = config.get("google").get("CHAT_SPACENAME")
+bot_header = chatcard.bot_header
+
+
+# TODO:2023-10-15 このデータクラスをasdictすると、EstimateCalcSheetInfoのgapiのserviseが変換できないと思われる。
+# その時は、dataclass.InitVarを使って、初期化限定変数を作ればいいらしい
 @dataclass
 class AnkenQuote(EstimateCalcSheetInfo):
     """
@@ -202,9 +211,7 @@ def update_msm_anken_schedule_sheet(
 
 
 class PrepareTask(BaseTask):
-    def execute_task(
-        self,
-    ):
+    def execute_task(self):
         # TODO:2023-09-28 [prepare start]
 
         # google sheetのリストを取得
@@ -236,25 +243,53 @@ class PrepareTask(BaseTask):
             print("見積もり計算表が見つかりませんでした。終了します。")
             sys.exit(0)
         return estimate_calcsheet_list
+        # TODO: 2023-10-13 この戻り値はjson形式なので、チャットのタスクとしてそのまま利用する
 
-    # TODO:2023-09-28 [prepare end]
+    def execute_task_by_chat(self):
+        result = self.execute_task()
+
+        if result is None:
+            print("見積もり計算表が見つかりませんでした。終了します。")
+            # google chatのエラーとして返す
+            return chat.card.genactionresponse_dialog("見積もり計算表が見つかりませんでした。終了します。")
+
+        estimate_list_checkbox = chat.card.genwidget_checkboxlist(
+            "見積もり一覧",
+            "estimate_list_checkbox",
+            [
+                chat.card.SelectionInputItem(
+                    estimate_calcsheet.get("name"), json.dumps(estimate_calcsheet)
+                )
+                for estimate_calcsheet in result
+            ],
+        )
+
+        # 設定カードのボディを生成
+        config_body = chat.card.create_card(
+            "config_card__generate_quote",
+            header=bot_header,
+            widgets=[
+                estimate_list_checkbox,
+                # ボタンを追加
+                chat.card.genwidget_buttonlist(
+                    [
+                        chat.card.gencomponent_button(
+                            "タスク実行", "run_task__generate_quotes"
+                        ),
+                        chat.card.gencomponent_button("キャンセル", "cancel_task"),
+                    ]
+                ),
+            ],
+        )
+        return googleapi.create_chat_message(chat_service, spacename, config_body)
 
 
 class MainTask(BaseTask):
-    def execute_task(self, gsheet_estimate_calcsheet_ids: list[str]):
-        # TODO:2023-09-28
-        # ここでのデータのやり取りは、見積もり計算表のIDになるかな。
-        # タスク側はIDを元に再度取得をして処理を行えばいい
-
-        # TODO:2023-09-28 [task start]
-
-        # TODO:2023-10-09 ここは一時的にコメントアウト。idのみにしなくてもよいかもしれない
-        # 現在はdictが入ってるはずで、タスク化前と同じデータ構造。タスクに渡すデータもこのままでいけるかもしれない
-        selected_estimate_calcsheets = (
-            {"id": calcsheet_id} for calcsheet_id in gsheet_estimate_calcsheet_ids
+    def execute_task(self, process_data: ProcessData | None = None):
+        # 渡されたデータを展開する
+        selected_estimate_calcsheets = process_data["task_data"].get(
+            "selected_estimate_calcsheets"
         )
-
-        selected_estimate_calcsheets = gsheet_estimate_calcsheet_ids
 
         # 一連の操作中に使うデータ構造を入れるリスト（グループ化はメール生成時に行う）
         anken_quotes: list[AnkenQuote] = generate_anken_quote_list(
@@ -357,4 +392,17 @@ class MainTask(BaseTask):
                 message["id"],
                 threads[0].get("id", ""),
             )
-        # TODO:2023-09-28 [task end]
+
+    # チャット用のタスクメソッド
+    def execute_task_by_chat(self, process_data: ProcessData | None = None):
+        result = self.execute_task(process_data)
+        # チャット用のメッセージを作成する
+        send_message_body = chat.card.create_card(
+            "result_card__generate_quote",
+            header=bot_header,
+            widgets=[
+                chat.card.genwidget_textparagraph(f"見積書を作成しました。: {result.get('id')}"),
+            ],
+        )
+        # send_message_body.update({"actionResponse": {"type": "NEW_MESSAGE"}})
+        return googleapi.create_chat_message(chat_service, spacename, send_message_body)
