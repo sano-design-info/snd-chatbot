@@ -41,17 +41,16 @@ GOOGLE_API_SCOPES = googleapi.API_SCOPES
 # load config
 config = load_config.CONFIG
 
-msm_gas_boilerplate_path = config.get("run_mail_action").get("MSM_GAS_BOILERPLATE_PATH")
-estimatecalc_template_gsheet_id = config.get("run_mail_action").get("ESTIMATECALC_TEMPLATE_GSHEET_ID")
 schedule_spreadsheet_id = config.get("general").get("SCHEDULE_SPREADSHEET_ID")
 schedule_spreadsheet_table_range = config.get("general").get("SCHEDULE_SPREADSHEET_TABLE_RANGE")
 
-target_userid = config.get("google").get("GMAIL_USER_ID")
-
+msm_gas_boilerplate_path = config.get("run_mail_action").get("MSM_GAS_BOILERPLATE_PATH")
+estimatecalc_template_gsheet_id = config.get("run_mail_action").get("ESTIMATECALC_TEMPLATE_GSHEET_ID")
 renrakukoumoku_save_dir_ids = config.get("run_mail_action").get("RENRAKUKOUMOKU_SAVE_DIR_IDS")
 copy_project_dir_dest_path = Path(config.get("run_mail_action").get("COPY_PROJECT_DIR_DEST_PATH"))
 
 # google api service
+target_userid = config.get("google").get("GMAIL_USER_ID")
 google_cred: Credentials = googleapi.get_cledential(GOOGLE_API_SCOPES)
 drive_service = build("drive", "v3", credentials=google_cred)
 sheet_service = build("sheets", "v4", credentials=google_cred)
