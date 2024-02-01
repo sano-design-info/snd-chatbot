@@ -35,13 +35,14 @@ config = load_config.CONFIG
 schedule_spreadsheet_table_range = config.get("general").get("SCHEDULE_SPREADSHEET_TABLE_RANGE")
 
 MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
-ESTIMATE_CALCSHEET_DIR_IDS = config.get("generate_quotes").get("ESTIMATE_CALCSHEET_DIR_IDS")
-# MITSUMORI_RANGES = config["mapping"]
-ARCHIVED_ESTIMATECALCSHEET_DIR_ID = config.get("generate_quotes").get("ARCHIVED_ESTIMATECALCSHEET_DIR_ID")
+
+SCRIPT_CONFIG = config.get("generate_quotes")
+ESTIMATE_CALCSHEET_DIR_IDS = SCRIPT_CONFIG.get("ESTIMATE_CALCSHEET_DIR_IDS")
+ARCHIVED_ESTIMATECALCSHEET_DIR_ID = SCRIPT_CONFIG.get("ARCHIVED_ESTIMATECALCSHEET_DIR_ID")
+MAIL_TEMPLATE_BODY_STR =  SCRIPT_CONFIG.get("mail_template_body")
 
 GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
 
-SCRIPT_CONFIG = config.get("generate_quotes")
 
 export_qupte_dirpath = EXPORTDIR_PATH / "quote"
 export_qupte_dirpath.mkdir(parents=True, exist_ok=True)
@@ -380,7 +381,7 @@ class MainTask(BaseTask):
 
             # メール生成のテンプレは別のファイルに書く。
             # 納期はグループ内最初のQuoteItemのものを利用（案件に対して同じ納期を設定している前提）
-            mail_template_body: str = SCRIPT_CONFIG.get("mail_template_body")
+            mail_template_body: str = MAIL_TEMPLATE_BODY_STR
             replybody = mail_template_body.replace(
                 "{{nouki}}", anken_quotes[0].duration_str
             )
