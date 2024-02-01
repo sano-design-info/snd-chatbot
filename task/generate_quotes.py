@@ -32,15 +32,17 @@ from task import BaseTask, ProcessData
 # load config, credential
 config = load_config.CONFIG
 
-MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
-ESTIMATE_CALCSHEET_DIR_IDS = config.get("google").get("MITSUMORI_DIR_IDS")
-MITSUMORI_RANGES = config["mapping"]
-MOVE_DIR_ID = config.get("google").get("MOVE_DIR_ID")
+schedule_spreadsheet_table_range = config.get("general").get("SCHEDULE_SPREADSHEET_TABLE_RANGE")
 
-GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
-table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
+MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
 
 SCRIPT_CONFIG = config.get("generate_quotes")
+ESTIMATE_CALCSHEET_DIR_IDS = SCRIPT_CONFIG.get("ESTIMATE_CALCSHEET_DIR_IDS")
+ARCHIVED_ESTIMATECALCSHEET_DIR_ID = SCRIPT_CONFIG.get("ARCHIVED_ESTIMATECALCSHEET_DIR_ID")
+MAIL_TEMPLATE_BODY_STR =  SCRIPT_CONFIG.get("mail_template_body")
+
+GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
+
 
 export_qupte_dirpath = EXPORTDIR_PATH / "quote"
 export_qupte_dirpath.mkdir(parents=True, exist_ok=True)
@@ -202,8 +204,8 @@ def update_msm_anken_schedule_sheet(
     msmankenmaplist.msmankenmap_list.append(msmanken_info)
 
     export_pd = msmankenmaplist.generate_update_sheet_values()
-    before_pd = get_schedule_table_area(table_search_range, gsheet_service)
-    update_data = generate_update_valueranges(table_search_range, before_pd, export_pd)
+    before_pd = get_schedule_table_area(schedule_spreadsheet_table_range, gsheet_service)
+    update_data = generate_update_valueranges(schedule_spreadsheet_table_range, before_pd, export_pd)
 
     print(f"update result:{update_data}")
 
@@ -340,7 +342,7 @@ class MainTask(BaseTask):
                 _ = googleapi.update_file(
                     gdrive_service,
                     file_id=anken_quote.calcsheet_source,
-                    add_parents=MOVE_DIR_ID,
+                    add_parents=ARCHIVED_ESTIMATECALCSHEET_DIR_ID,
                     remove_parents=previous_parents,
                     fields="id, parents",
                 )
@@ -379,7 +381,7 @@ class MainTask(BaseTask):
 
             # メール生成のテンプレは別のファイルに書く。
             # 納期はグループ内最初のQuoteItemのものを利用（案件に対して同じ納期を設定している前提）
-            mail_template_body: str = SCRIPT_CONFIG.get("mail_template_body")
+            mail_template_body: str = MAIL_TEMPLATE_BODY_STR
             replybody = mail_template_body.replace(
                 "{{nouki}}", anken_quotes[0].duration_str
             )

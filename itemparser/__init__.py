@@ -16,7 +16,7 @@ from helper.regexpatterns import MSM_ANKEN_NUMBER, RANGE_ADDR_PATTERN
 
 # load config
 config = load_config.CONFIG
-update_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
+schedule_spreadsheet_id = config.get("general").get("SCHEDULE_SPREADSHEET_ID")
 
 
 def convert_gmail_datetimestr(gmail_datetimeformat: str) -> datetime:
@@ -427,7 +427,7 @@ def get_schedule_table_area(
             sheet_service.spreadsheets()
             .values()
             .append(
-                spreadsheetId=update_sheet_id,
+                spreadsheetId=schedule_spreadsheet_id,
                 range=search_range,
                 body={"values": append_values},
                 valueInputOption="USER_ENTERED",
@@ -446,7 +446,7 @@ def get_schedule_table_area(
         schedule_table_res = (
             sheet_service.spreadsheets()
             .values()
-            .get(spreadsheetId=update_sheet_id, range=schedule_table_range)
+            .get(spreadsheetId=schedule_spreadsheet_id, range=schedule_table_range)
             .execute()
         )
         # 値が取得できた。
@@ -522,7 +522,7 @@ def update_schedule_sheet(update_data: list[dict], sheet_service: Resource):
         update_gsheet_res = (
             sheet_service.spreadsheets()
             .values()
-            .batchUpdate(spreadsheetId=update_sheet_id, body=update_value_body)
+            .batchUpdate(spreadsheetId=schedule_spreadsheet_id, body=update_value_body)
             .execute()
         )
         return update_gsheet_res

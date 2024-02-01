@@ -1,5 +1,7 @@
 # msm-gas-prepare
 
+TODO:2024-02-01 ここの内容は書き換えて、動作時に必要な説明を載せます。テストでも必要な操作を上げていきます
+
 ## prepare
 
 ### config
@@ -30,3 +32,21 @@ config.tomlが本番用です。 dev-config.tomlは開発向けにしてます�
 ```cmd
 > pipenv run python .\run_mail_action.py
 ```
+
+## テスト方法
+
+実際のメールやGoogleスプレッドシートなどでテストをする場合は以下の手順を踏みます。
+
+TODO:2024-02-01 クリーンアップ用のスクリプトを用意することを検討すること。
+TODO:2024-02-01 以下の手順を自動化する手段を検討すること。
+
+* docker-compose -f ./compose.localdev.yml build -> docker-compose -f ./compose.localdev.yml up -d でサーバーを起動します
+* メールはテスト用のメールを用意します
+  * MA-9991というテスト用メールを作成します。リッチテキストとしって、配管連絡項目を用意します。
+  * ファイルが古いと検索に出てこないので、あらかじめ作成しなおします
+  * ラベル:`snd-ミスミ` を付ける必要があります（snd>ミスミという親子のラベル）
+* 見積計算表を所定の位置に置きます。
+  * 2024-02-01 時点で　`ミスミ配管図見積り計算表v3_MA-9991`という名称で用意済みです。
+* script_**.pyの各種を実行してcli上で動作確認をします
+* 実行結果は生成物や動作挙動を確認します。docker compose logs workerでログを確認します
+* 最後にdocker-compose -f ./compose.localdev.yml downでサーバーを停止します
