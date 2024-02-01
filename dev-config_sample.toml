@@ -1,56 +1,100 @@
+[general]
+## ここでは二つ以上で参照する値を設定する
+
+# スケジュール表のスプレッドシートID
+# https://docs.google.com/spreadsheets/d/[シートID]
+SCHEDULE_SPREADSHEET_ID = "[シートID]"
+# スケジュール表の範囲先
+SCHEDULE_SPREADSHEET_TABLE_RANGE = "[シート名]![範囲]"
+
+# [generate_quotes, get_billingで利用]
+# 見積書、請求書へ記載する会社名
+TORIHIKISAKI_NAME = ""
+
 [google]
-# API利用時の認証のjsonファイル。
+GMAIL_USER_ID = "me"
 CRED_FILEPATH = "json path"
 CHAT_SA_CRED_FILEPATH = "json path"
-CHAT_SPACENAME = "spaces/[space id]"
+# スペース名を記載します。スペースの設定から確認できます。
+CHAT_SPACENAME = "spaces/[space name]"
 
-# 見積計算表の検索先DIR
-MITSUMORI_DIR_IDS = [""]
-# 見積計算表を移動するDIR
-MOVE_DIR_ID = ""
-
-# GmailのユーザーID, meは認証したユーザーと同じ意味
-GMAIL_USER_ID = "me"
-# 一時的に配管連絡項目を生成するファイルを補完するDIR
-GSHEET_TMP_DIR_IDS = [""]
-# スケジュール表の情報更新をする先のシート名
-TABLE_SEARCH_RANGE = ""
-
-# 見積計算表のテンプレシートのID
-ESTIMATE_TEMPLATE_GSHEET_ID = ""
-# スケジュール表のシートID
-SCHEDULE_SHEET_ID = ""
-
+# 2024-02-01 このセクションは今後利用しないので、除去予定。
 [mfci]
 # 取引先IDの取得方法: 取引先一覧 -> そのIDではなく、そのID -> 取引先取得 -> relationships>departments>data>id が取引先ID
-# 旧個人事業側の事業所で使ってた取引先ID
+# 法人側乗り換えで登録した取引先ID
 TORIHIKISAKI_ID = ""
 
-# 認証情報
+# 認証情報 法人側 v3
 MFCLOUD_CLIENT_ID = ""
 MFCLOUD_CLIENT_SECRET = ""
 
-TORIHIKISAKI_NAME = "（株）ミスミ プレス事業部 自動車型事業チーム"
+# APIで一度に取得するデータ件数
 QUOTE_PER_PAGE = 100
 
-[mapping]
-price = "計算結果!B5"
-duration = "計算結果!B6"
-discount_flag = "計算結果!B7"
+[run_mail_action]
+# ボイラープレート向け
+MSM_GAS_BOILERPLATE_PATH = ""
+# ボイラープレートから生成してファイルなどを準備したプロジェクトフォルダの保存先
+COPY_PROJECT_DIR_DEST_PATH = ""
 
-[mail_template]
-# 本文
-body = """
+# 見積計算表のテンプレート:ID
+# https://docs.google.com/spreadsheets/d/[シートID]
+ESTIMATECALC_TEMPLATE_GSHEET_ID = "[シートID]"
+
+# 連絡項目表ファイルを一時保存するGoogleドライブのフォルダID
+# https://drive.google.com/drive/folders/[フォルダID]
+RENRAKUKOUMOKU_SAVE_DIR_IDS = ["[フォルダID]"]
+
+[generate_quotes]
+# 見積計算の保存先
+# https://drive.google.com/drive/folders/[フォルダID]
+ESTIMATE_CALCSHEET_DIR_IDS = ["[フォルダID]"]
+
+# 見積計算表のPDF生成をした後の生成前シート保存先
+# https://drive.google.com/drive/folders/[フォルダID]
+ARCHIVED_ESTIMATECALCSHEET_DIR_ID = "[フォルダID]"
+
+mail_template_body = """
 メールテンプレートです
 納期置き換えテスト{{nouki}}
 
 ---
 
-ここに署名を入れるとちょうどよいです
+ここに署名が入ります
+"""
+
+[get_billing]
+mail_to = ""
+mail_cc = ""
+mail_template_title = "{{datetime}} 請求書送付について"
+mail_template_body = """
+
+請求書のテスト用テンプレです。
+
+---
+
+ここに署名が入ります
+"""
+
+[send_sagakusyoumei]
+MSM_PROSUGATE_ID = ""
+MSM_PROSUGATE_PASS = ""
+
+# https://docs.google.com/spreadsheets/d/[シートID]
+TEMPLATE_SHEET_ID = "[シートID]"
+
+MAIL_TO = ""
+MAIL_CC = ""
+MAIL_TEMPLATE_TITLE = "test 売掛金勘定差額明細書（請求書）送付について"
+MAIL_TEMPLATE_BODY = """
+
+{{billing_year}}年{{billing_month}}月の売掛金勘定差額明細書のメールテスト用です
+
+---
+
+ここに署名が入ります
 """
 
 [other]
-# ボイラープレートのローカルパス
-MSM_GAS_BOILERPLATE_PATH = ""
-# run_mail_actionで生成したフォルダのコピー先
-COPY_PROJECT_DIR_DEST_PATH = ""
+# スケジュール表更新用に収集するデータのフォルダ
+# HAKIAN_PROJECT_DIRPATH = "Z:/00_取引先一覧/80ミスミ「ガススプリング配管図」/1 配管図/2022/"
