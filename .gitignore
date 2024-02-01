@@ -152,14 +152,14 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+
 exam
 export_files
 .DS_Store
 quote/
 billing/
 debug.log
-config.toml
-dev-config.toml
+*config.toml
 google_client_secret.json
 mfcloud_access_token.json
 google_api_access_token.json
