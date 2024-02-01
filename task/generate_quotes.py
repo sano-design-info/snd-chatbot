@@ -32,13 +32,14 @@ from task import BaseTask, ProcessData
 # load config, credential
 config = load_config.CONFIG
 
+schedule_spreadsheet_table_range = config.get("general").get("SCHEDULE_SPREADSHEET_TABLE_RANGE")
+
 MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
-ESTIMATE_CALCSHEET_DIR_IDS = config.get("google").get("MITSUMORI_DIR_IDS")
-MITSUMORI_RANGES = config["mapping"]
-MOVE_DIR_ID = config.get("google").get("MOVE_DIR_ID")
+ESTIMATE_CALCSHEET_DIR_IDS = config.get("generate_quotes").get("ESTIMATE_CALCSHEET_DIR_IDS")
+# MITSUMORI_RANGES = config["mapping"]
+ARCHIVED_ESTIMATECALCSHEET_DIR_ID = config.get("generate_quotes").get("ARCHIVED_ESTIMATECALCSHEET_DIR_ID")
 
 GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
-table_search_range = config.get("google").get("TABLE_SEARCH_RANGE")
 
 SCRIPT_CONFIG = config.get("generate_quotes")
 
@@ -202,8 +203,8 @@ def update_msm_anken_schedule_sheet(
     msmankenmaplist.msmankenmap_list.append(msmanken_info)
 
     export_pd = msmankenmaplist.generate_update_sheet_values()
-    before_pd = get_schedule_table_area(table_search_range, gsheet_service)
-    update_data = generate_update_valueranges(table_search_range, before_pd, export_pd)
+    before_pd = get_schedule_table_area(schedule_spreadsheet_table_range, gsheet_service)
+    update_data = generate_update_valueranges(schedule_spreadsheet_table_range, before_pd, export_pd)
 
     print(f"update result:{update_data}")
 
@@ -340,7 +341,7 @@ class MainTask(BaseTask):
                 _ = googleapi.update_file(
                     gdrive_service,
                     file_id=anken_quote.calcsheet_source,
-                    add_parents=MOVE_DIR_ID,
+                    add_parents=ARCHIVED_ESTIMATECALCSHEET_DIR_ID,
                     remove_parents=previous_parents,
                     fields="id, parents",
                 )

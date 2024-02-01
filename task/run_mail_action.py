@@ -40,14 +40,16 @@ GOOGLE_API_SCOPES = googleapi.API_SCOPES
 
 # load config
 config = load_config.CONFIG
-gsheet_tmp_dir_ids = config.get("google").get("GSHEET_TMP_DIR_IDS")
-msm_gas_boilerplate_path = config.get("other").get("MSM_GAS_BOILERPLATE_PATH")
-schedule_sheet_id = config.get("google").get("SCHEDULE_SHEET_ID")
-sheet_name = config.get("google").get("TABLE_SEARCH_RANGE")
-estimate_template_gsheet_id = config.get("google").get("ESTIMATE_TEMPLATE_GSHEET_ID")
-copy_project_dir_dest_path = Path(config.get("other").get("COPY_PROJECT_DIR_DEST_PATH"))
+
+msm_gas_boilerplate_path = config.get("run_mail_action").get("MSM_GAS_BOILERPLATE_PATH")
+estimatecalc_template_gsheet_id = config.get("run_mail_action").get("ESTIMATECALC_TEMPLATE_GSHEET_ID")
+schedule_spreadsheet_id = config.get("general").get("SCHEDULE_SPREADSHEET_ID")
+schedule_spreadsheet_table_range = config.get("general").get("SCHEDULE_SPREADSHEET_TABLE_RANGE")
 
 target_userid = config.get("google").get("GMAIL_USER_ID")
+
+renrakukoumoku_save_dir_ids = config.get("run_mail_action").get("RENRAKUKOUMOKU_SAVE_DIR_IDS")
+copy_project_dir_dest_path = Path(config.get("run_mail_action").get("COPY_PROJECT_DIR_DEST_PATH"))
 
 # google api service
 google_cred: Credentials = googleapi.get_cledential(GOOGLE_API_SCOPES)
@@ -135,7 +137,7 @@ def generate_pdf_by_renrakukoumoku_excel(
             target_filepath,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.google-apps.spreadsheet",
-            gsheet_tmp_dir_ids,
+            renrakukoumoku_save_dir_ids,
         )
         print(f"upload_results: {upload_results}")
 
@@ -305,8 +307,8 @@ def add_schedule_spreadsheet(
 
     schedule_gsheet = googleapi.append_sheet(
         sheet_service,
-        schedule_sheet_id,
-        sheet_name,
+        schedule_spreadsheet_id,
+        schedule_spreadsheet_table_range,
         append_values,
         "USER_ENTERED",
         "INSERT_ROWS",
@@ -340,7 +342,7 @@ def generate_estimate_calcsheet(attachment_dirpath: Path) -> None:
         # 見積書のコピーを作成する。
         copy_template_results = googleapi.copy_file(
             drive_service,
-            estimate_template_gsheet_id,
+            estimatecalc_template_gsheet_id,
             "id,name",
         )
 
