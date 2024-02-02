@@ -54,6 +54,19 @@ ESTIMATE_CALCSHEET_DIR_IDS = ["[フォルダID]"]
 # https://drive.google.com/drive/folders/[フォルダID]
 ARCHIVED_ESTIMATECALCSHEET_DIR_ID = "[フォルダID]"
 
+# 見積書生成:
+# 見積書のファイル一覧を記録するGoogleスプレッドシートのID
+# https://docs.google.com/spreadsheets/d/[シートID]
+QUOTE_FILE_LIST_GSHEET_ID = "[シートID]"
+# GoogleスプレッドシートのテンプレートID
+# https://docs.google.com/spreadsheets/d/[シートID]
+QUOTE_TEMPLATE_GSHEET_ID = "[シートID]"
+# テンプレートに入力するセルマッピング・JSONファイルのパス
+QUOTE_TEMPLATE_CELL_MAPPING_JSON = "json path"
+# 見積書の保存先
+# https://drive.google.com/drive/folders/[フォルダID]
+QUOTE_SAVE_DIR_IDS = ["[フォルダID]"]
+
 mail_template_body = """
 メールテンプレートです
 納期置き換えテスト{{nouki}}
@@ -64,6 +77,19 @@ mail_template_body = """
 """
 
 [get_billing]
+# 請求書生成:
+# 請求書のファイル一覧を記録するGoogleスプレッドシートのID
+# https://docs.google.com/spreadsheets/d/[シートID]
+INVOICE_FILE_LIST_GSHEET_ID = "[シートID]"
+# GoogleスプレッドシートのテンプレートID
+# https://docs.google.com/spreadsheets/d/[シートID]
+INVOICE_TEMPLATE_GSHEET_ID = "[シートID]"
+# テンプレートに入力するセルマッピング・JSONファイルのパス
+INVOICE_TEMPLATE_CELL_MAPPING_JSON = "json path"
+# 請求書の保存先
+# https://drive.google.com/drive/folders/[フォルダID]
+INVOICE_SAVE_DIR_IDS = ["[フォルダID]"]
+
 mail_to = ""
 mail_cc = ""
 mail_template_title = "{{datetime}} 請求書送付について"

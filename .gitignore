@@ -165,3 +165,4 @@ mfcloud_access_token.json
 google_api_access_token.json
 chat_sa_client_secret.json
 m_synology_drive_point
+cell_mapping_*.json
