@@ -416,7 +416,7 @@ class MainTask(BaseTask):
                 quote_file_id = googleapi.dupulicate_file(
                     gdrive_service,
                     QUOTE_TEMPLATE_GSHEET_ID,
-                    f"見積書_{anken_quote.anken_number}.pdf",
+                    f"見積書_{anken_quote.anken_number}",
                 )
                 # 見積書のファイル名と保存先を設定
                 # ファイル名:見積書_[納期].pdf
