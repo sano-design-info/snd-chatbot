@@ -514,17 +514,17 @@ def get_file_list(
 def upload_file(
     drive_service: Resource,
     src_file_path: Path,
-    src_file_mime_type: str,
-    dst_file_meta_type: str,
+    src_file_mimetype: str,
+    dst_file_mimetype: str,
     dst_file_parents: list[str] | None = None,
 ) -> dict:
     """
     Google Drive APIを使用して、ファイルを作成します。
     args:
         drive_service: Drive APIのサービス
-        src_file_path: 作成する元のファイルのパス
-        src_file_mime_type: 作成する元のファイルのMIMEタイプ
-        dst_file_meta_type: Google Driveへアップロードする際に変換するファイルのMIMEタイプ
+        src_file_path: 元のファイルのパス
+        src_file_mimetype: 元のファイルのMIMEタイプ
+        dst_file_mimetype: Google Driveへアップロードする際に変換するファイルのMIMEタイプ
         dst_file_parents: Google Driveへアップロードする際のファイルの親フォルダID
     return:
         作成したファイルの情報
@@ -533,13 +533,13 @@ def upload_file(
     # ExcelファイルをPDFに変換する
     media = MediaFileUpload(
         src_file_path,
-        mimetype=src_file_mime_type,
+        mimetype=src_file_mimetype,
         resumable=True,
     )
 
     file_metadata = {
         "name": src_file_path.name,
-        "mimeType": dst_file_meta_type,
+        "mimeType": dst_file_mimetype,
         "parents": dst_file_parents,
     }
 
@@ -786,6 +786,37 @@ def append_sheet(
             includeValuesInResponse=include_values_in_response,
         )
     ).execute()
+
+
+def update_sheet(
+    service: Resource,
+    spreadsheet_id: str,
+    range_name: str,
+    values: list[list],
+    value_input_option: str = "RAW",
+) -> dict:
+    """
+    Google Spreadsheet APIを使用して、スプレッドシートのセル範囲に値を記入します。
+    args:
+        service: Spreadsheet APIのサービス
+        spreadsheet_id: スプレッドシートID
+        range_name: セル範囲
+        values: 記入する値のリスト
+        value_input_option: 値の入力方法
+    return:
+        APIからのレスポンス
+    """
+    return (
+        service.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueInputOption=value_input_option,
+            body={"values": values},
+        )
+        .execute()
+    )
 
 
 # [Google Chat API]

@@ -102,6 +102,7 @@ class AnkenQuote(EstimateCalcSheetInfo):
     # mfci_quote_json: dict = field(init=False, default=None)
     # mfci_quote_item_json: dict = field(init=False, default=None)
     quote_gsheet_data = field(init=False, default=None)
+    updated_quote_manage_cell_address: str = field(init=False, default=None)
 
     def __post_init__(self):
         # 継承元のpost_initを呼ぶ
@@ -109,7 +110,6 @@ class AnkenQuote(EstimateCalcSheetInfo):
         # 収集した見積もり計算書の情報を元に見積書用のjsonを生成する
         # self._convert_json_mfci_quote_item()
         # self._convert_json_mfci_quote()
-        self._convert_dict_to_gsheet_tamplate()
 
     def print_quote_info(self) -> None:
         """
@@ -195,24 +195,7 @@ class AnkenQuote(EstimateCalcSheetInfo):
 
         self.mfci_quote_json = quote_data
 
-    # TODO:2024-02-05 見積書番号を専用シートからgetする機能を用意する
-    def _get_quote_id(self) -> str:
-        # 見積管理シートへ行を入れて見積番号を取得する
-
-        new_quote_line = googleapi.append_sheet(
-            gsheet_service,
-            QUOTE_FILE_LIST_GSHEET_ID,
-            "見積書管理",
-            [["=TEXT(ROW()-1,'0000')", "", "", ""]],
-            "USER_ENTERED",
-            "INSERT_ROWS",
-            True,
-        )
-
-        # 追加できた行のA列の値を取得
-        return new_quote_line.get("updates").get("updatedData").get("values")[0][0]
-
-    def _convert_dict_to_gsheet_tamplate(self) -> None:
+    def convert_dict_to_gsheet_tamplate(self, quote_id) -> None:
         # 見積書へ書き込むデータを作る
         # ここで作成するデータは、見積書のテンプレートに合わせたデータを作成する
 
@@ -240,7 +223,8 @@ class AnkenQuote(EstimateCalcSheetInfo):
         # TODO:2024-02-05 これは設定にする
         quote_id_prefix = "DCCF6E"
         # 見積書番号を生成
-        qupte_id = f"{quote_id_prefix}-Q-{self._get_quote_id()}"
+        # TODO: 2024-02-05 ここのget_quote_idはMainTask側で処理して情報をanken_quoteに入れる
+        qupte_id = f"{quote_id_prefix}-Q-{quote_id}"
 
         today_datetime = datetime.now()
         self.quote_gsheet_data = {
@@ -252,6 +236,22 @@ class AnkenQuote(EstimateCalcSheetInfo):
             "note": quote_note,
             "item_table": [hinmoku],
         }
+
+
+def get_quote_id_by_quote_manage_gsheet(updated_result_quote_manage_gsheet) -> str:
+    # 追加できた行のA列の値を取得
+    return (
+        updated_result_quote_manage_gsheet.get("updates")
+        .get("updatedData")
+        .get("values")[0][0]
+    )
+
+
+def get_updated_cell_address_by_quote_manage_gsheet(
+    updated_result_quote_manage_gsheet
+) -> str:
+    # 見積管理シートへ行を入れて見積番号を取得する
+    return updated_result_quote_manage_gsheet.get("updates").get("updatedRange")
 
 
 def generate_anken_quote_list(estimate_calcsheets: list[dict]) -> list[AnkenQuote]:
@@ -392,91 +392,108 @@ class MainTask(BaseTask):
 
         # MFクラウドで見積書作成
         for anken_quote in anken_quotes:
-            # 見積書作成
-
-            # googleスプレッドシートの見積書テンプレートを複製する
-            quote_file_id = googleapi.dupulicate_file(
-                gdrive_service,
-                QUOTE_TEMPLATE_GSHEET_ID,
-                f"見積書_{anken_quote.anken_number}.pdf",
-            )
-            # 見積書のファイル名と保存先を設定
-            # ファイル名:見積書_[会社名]_[型式]_[納期].pdf
-            quote_filename = f"見積書_{TORIHIKISAKI_NAME}_{anken_quote.anken_number}_{anken_quote.duration:%m%d}.pdf"
-            _ = googleapi.update_file(
-                gdrive_service,
-                file_id=quote_file_id,
-                body={"name": quote_filename},
-                add_parents=QUOTE_GSHEET_SAVE_DIR_IDS,
-                fields="id, parents",
-            )
-
-            # 見積書へanken_quoteの内容を記録
-            sheet_data_mapper.write_data_to_sheet(
-                gsheet_service,
-                quote_file_id,
-                anken_quote.quote_gsheet_data,
-            )
-
-            # 見積書のPDFをダウンロード
-            googleapi.export_pdf_by_driveexporturl(
-                google_cred.token,
-                quote_file_id,
-                export_qupte_dirpath / quote_filename,
-                {
-                    "gid": "0",
-                    "size": "7",
-                    "portrait": "true",
-                    "fitw": "true",
-                    "gridlines": "false",
-                },
-            )
-
-            # 品目をAPIで作成
-            # created_item_result = create_item(
-            #     mfci_session, anken_quote.mfci_quote_item_json
-            # )
-            # 空の見積書作成
-            # created_quote_result = create_quote(
-            #     mfci_session, anken_quote.mfci_quote_json
-            # )
-
-            # 最後に品目を見積書へ追加
-            # attach_item_into_quote(
-            #     mfci_session,
-            #     created_quote_result["id"],
-            #     created_item_result["id"],
-            # )
-            # errorなら終了する
-            # if "errors" in created_quote_result:
-            #     print("エラーが発生しました。詳細はレスポンスを確認ください")
-            #     pprint(created_quote_result)
-            #     sys.exit(0)
-
-            # PDFのファイル名はミスミの型式をつける
-            # anken_quote.estimate_pdf_path = (
-            #     export_qupte_dirpath / f"見積書_{anken_quote.anken_number}.pdf"
-            # )
-            # download_quote_pdf(
-            #     mfci_session,
-            #     created_quote_result["pdf_url"],
-            #     anken_quote.estimate_pdf_path,
-            # )
-            print(
-                f"見積書のPDFをダウンロードしました。保存先:{anken_quote.estimate_pdf_path}"
-            )
-
-            # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
-            # TODO: 2023-04-20 ここは関数として切り出す -> helper.googleapi
             try:
-                previous_parents = ",".join(anken_quote.calcsheet_parents)
+                # [見積書作成を行う]
+                # 見積書管理表から番号を生成
+                updated_quote_manage_gsheet = googleapi.append_sheet(
+                    gsheet_service,
+                    QUOTE_FILE_LIST_GSHEET_ID,
+                    "見積書管理",
+                    [["=TEXT(ROW()-1,'0000')", "", "", ""]],
+                    "USER_ENTERED",
+                    "INSERT_ROWS",
+                    True,
+                )
+                # 見積書番号を取得
+                quote_id = get_quote_id_by_quote_manage_gsheet(
+                    updated_quote_manage_gsheet
+                )
 
+                # 見積書の情報を生成
+                anken_quote.convert_dict_to_gsheet_tamplate(quote_id)
+
+                # googleスプレッドシートの見積書テンプレートを複製する
+                quote_file_id = googleapi.dupulicate_file(
+                    gdrive_service,
+                    QUOTE_TEMPLATE_GSHEET_ID,
+                    f"見積書_{anken_quote.anken_number}.pdf",
+                )
+                # 見積書のファイル名と保存先を設定
+                # ファイル名:見積書_[納期].pdf
+                quote_filename = f"見積書_{anken_quote.anken_number}.pdf"
+
+                _ = googleapi.update_file(
+                    gdrive_service,
+                    file_id=quote_file_id,
+                    body={"name": quote_filename},
+                    add_parents=QUOTE_GSHEET_SAVE_DIR_IDS,
+                    fields="id, parents",
+                )
+
+                # 見積書へanken_quoteの内容を記録
+                sheet_data_mapper.write_data_to_sheet(
+                    gsheet_service,
+                    quote_file_id,
+                    anken_quote.quote_gsheet_data,
+                )
+
+                # 見積書のPDFをダウンロード
+                googleapi.export_pdf_by_driveexporturl(
+                    google_cred.token,
+                    quote_file_id,
+                    export_qupte_dirpath / quote_filename,
+                    {
+                        "gid": "0",
+                        "size": "7",
+                        "portrait": "true",
+                        "fitw": "true",
+                        "gridlines": "false",
+                    },
+                )
+
+                # 見積書のPDFをGoogleドライブへ保存
+                upload_pdf_result = googleapi.upload_file(
+                    gdrive_service,
+                    export_qupte_dirpath / quote_filename,
+                    "application/pdf",
+                    "application/pdf",
+                    QUOTE_PDF_SAVE_DIR_IDS,
+                )
+
+                # 見積書のGoogleスプレッドシートとPDFのURLを見積管理表に記録
+
+                # 生成した見積番号のセルアドレスからB列に置き換えて取得。AのみをBにする
+                # 例: updated_quote_manage_cell_address = "見積書管理!A2:D2" -> "見積書管理!B2:D2"
+                insert_range_in_quote_manage_sheet = (
+                    get_updated_cell_address_by_quote_manage_gsheet(
+                        updated_quote_manage_gsheet
+                    ).replace("A", "B")
+                )
+
+                # 見積管理表を更新する。B列からファイル名、見積書:Gsheet のIDからURL, 見積書:GDrive PDFのIDからURL
+                # 見積管理表に番号を追加したupdatedRows（updated_quote_manage_cell_address）を使うがB列以降を使う
+                _ = googleapi.update_sheet(
+                    gsheet_service,
+                    QUOTE_FILE_LIST_GSHEET_ID,
+                    insert_range_in_quote_manage_sheet,
+                    [
+                        [
+                            quote_filename,
+                            f"http://docs.google.com/spreadsheets/d/{quote_file_id}",
+                            f"http://drive.google.com/file/d/{upload_pdf_result.get('id')}",
+                        ]
+                    ],
+                )
+                print(
+                    f"見積書のPDFをダウンロードしました。保存先:{anken_quote.estimate_pdf_path}"
+                )
+                # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
                 _ = googleapi.update_file(
                     gdrive_service,
                     file_id=anken_quote.calcsheet_source,
                     add_parents=ARCHIVED_ESTIMATECALCSHEET_DIR_ID,
-                    remove_parents=previous_parents,
-                    fields="id, parents",
+                    remove_parents=",".join(anken_quote.calcsheet_parents),
+                    fields="id",
                 )
 
             except HttpError as error:
