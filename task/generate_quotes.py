@@ -4,20 +4,22 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from pprint import pprint
+# from pprint import pprint
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 import chat.card
 from api import googleapi
-from api.mfcloud_api import (
-    MFCIClient,
-    attach_item_into_quote,
-    create_item,
-    create_quote,
-    download_quote_pdf,
-)
+from api.googleapi import sheet_data_mapper
+
+# from api.mfcloud_api import (
+#     MFCIClient,
+#     attach_item_into_quote,
+#     create_item,
+#     create_quote,
+#     download_quote_pdf,
+# )
 from helper import EXPORTDIR_PATH, chatcard, load_config
 from itemparser import (
     EstimateCalcSheetInfo,
@@ -32,16 +34,34 @@ from task import BaseTask, ProcessData
 # load config, credential
 config = load_config.CONFIG
 
-schedule_spreadsheet_table_range = config.get("general").get("SCHEDULE_SPREADSHEET_TABLE_RANGE")
-
-MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
+# TODO:2024-02-05 この設定はitemparserに移動する
+schedule_spreadsheet_table_range = config.get("general").get(
+    "SCHEDULE_SPREADSHEET_TABLE_RANGE"
+)
+TORIHIKISAKI_NAME = config.get("general").get("TORIHIKISAKI_NAME")
 
 SCRIPT_CONFIG = config.get("generate_quotes")
 ESTIMATE_CALCSHEET_DIR_IDS = SCRIPT_CONFIG.get("ESTIMATE_CALCSHEET_DIR_IDS")
-ARCHIVED_ESTIMATECALCSHEET_DIR_ID = SCRIPT_CONFIG.get("ARCHIVED_ESTIMATECALCSHEET_DIR_ID")
-MAIL_TEMPLATE_BODY_STR =  SCRIPT_CONFIG.get("mail_template_body")
+ARCHIVED_ESTIMATECALCSHEET_DIR_ID = SCRIPT_CONFIG.get(
+    "ARCHIVED_ESTIMATECALCSHEET_DIR_ID"
+)
+MAIL_TEMPLATE_BODY_STR = SCRIPT_CONFIG.get("mail_template_body")
 
-GOOGLE_CREDENTIAL = config.get("google").get("CRED_FILEPATH")
+MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
+
+# 見積書のGoogleスプレッドシート関連
+# 見積書のファイル一覧を記録するGoogleスプレッドシートのID
+QUOTE_FILE_LIST_GSHEET_ID = SCRIPT_CONFIG.get("QUOTE_FILE_LIST_GSHEET_ID")
+# GoogleスプレッドシートのテンプレートID
+QUOTE_TEMPLATE_GSHEET_ID = SCRIPT_CONFIG.get("QUOTE_TEMPLATE_GSHEET_ID")
+# テンプレートに入力するセルマッピング・JSONファイルのパス
+QUOTE_TEMPLATE_CELL_MAPPING_JSON_PATH = SCRIPT_CONFIG.get(
+    "QUOTE_TEMPLATE_CELL_MAPPING_JSON_PATH"
+)
+# 見積書のGoogleスプレッドシート保存先
+QUOTE_GSHEET_SAVE_DIR_IDS = SCRIPT_CONFIG.get("QUOTE_GSHEET_SAVE_DIR_IDS")
+# 見積書のPDF保存先
+QUOTE_PDF_SAVE_DIR_IDS = SCRIPT_CONFIG.get("QUOTE_PDF_SAVE_DIR_IDS")
 
 
 export_qupte_dirpath = EXPORTDIR_PATH / "quote"
@@ -60,7 +80,7 @@ gmail_service = build("gmail", "v1", credentials=google_cred)
 gsheet_service = build("sheets", "v4", credentials=google_cred)
 
 # mfcloudのセッション作成
-mfci_session = MFCIClient().get_session()
+# mfci_session = MFCIClient().get_session()
 
 # チャット用の認証情報を取得
 google_sa_cred = googleapi.get_cledential_by_serviceaccount(googleapi.CHAT_API_SCOPES)
@@ -79,21 +99,25 @@ class AnkenQuote(EstimateCalcSheetInfo):
     """
 
     estimate_pdf_path: Path = field(init=False, default=None)
-    mfci_quote_json: dict = field(init=False, default=None)
-    mfci_quote_item_json: dict = field(init=False, default=None)
+    # mfci_quote_json: dict = field(init=False, default=None)
+    # mfci_quote_item_json: dict = field(init=False, default=None)
+    quote_gsheet_data = field(init=False, default=None)
 
     def __post_init__(self):
         # 継承元のpost_initを呼ぶ
         super().__post_init__()
         # 収集した見積もり計算書の情報を元に見積書用のjsonを生成する
-        self._convert_json_mfci_quote_item()
-        self._convert_json_mfci_quote()
+        # self._convert_json_mfci_quote_item()
+        # self._convert_json_mfci_quote()
+        self._convert_dict_to_gsheet_tamplate()
 
     def print_quote_info(self) -> None:
         """
         生成した見積情報をワンラインで表示する
         """
-        print(f"見積情報: 型式:{self.anken_number} 日時:{self.duration} 価格:{self.price}")
+        print(
+            f"見積情報: 型式:{self.anken_number} 日時:{self.duration} 価格:{self.price}"
+        )
 
     def _convert_json_mfci_quote_item(self) -> None:
         """
@@ -165,9 +189,69 @@ class AnkenQuote(EstimateCalcSheetInfo):
             else:
                 reverse_part_number = reverse_part_number + "-RH"
 
-            quote_data["note"] = f"本見積は{reverse_part_number}の対象側作図案件となります"
+            quote_data[
+                "note"
+            ] = f"本見積は{reverse_part_number}の対象側作図案件となります"
 
         self.mfci_quote_json = quote_data
+
+    # TODO:2024-02-05 見積書番号を専用シートからgetする機能を用意する
+    def _get_quote_id(self) -> str:
+        # 見積管理シートへ行を入れて見積番号を取得する
+
+        new_quote_line = googleapi.append_sheet(
+            gsheet_service,
+            QUOTE_FILE_LIST_GSHEET_ID,
+            "見積書管理",
+            [["=TEXT(ROW()-1,'0000')", "", "", ""]],
+            "USER_ENTERED",
+            "INSERT_ROWS",
+            True,
+        )
+
+        # 追加できた行のA列の値を取得
+        return new_quote_line.get("updates").get("updatedData").get("values")[0][0]
+
+    def _convert_dict_to_gsheet_tamplate(self) -> None:
+        # 見積書へ書き込むデータを作る
+        # ここで作成するデータは、見積書のテンプレートに合わせたデータを作成する
+
+        hinmoku = {
+            "name": f"{self.anken_number} ガススプリング配管図",
+            "detail": f"納期 {self.duration:%m/%d}",
+            "price": 0,
+            "quantity": int(self.price),
+            "zeiritu": "10%",
+        }
+
+        # LRは条件判断を行う
+        quote_note = ""
+        rh_flag = self.anken_number.split("-")[-1]
+        if rh_flag in ("RH", "LH") != 0:
+            # RHの場合はLH, LHの場合はRHの備考文章を作成
+            reverse_part_number = "MA-" + "-".join(self.anken_number.split("-")[0:-1])
+            if rh_flag == "RH":
+                reverse_part_number = reverse_part_number + "-LH"
+            else:
+                reverse_part_number = reverse_part_number + "-RH"
+
+            quote_note = f"本見積は{reverse_part_number}の対象側作図案件となります"
+
+        # TODO:2024-02-05 これは設定にする
+        quote_id_prefix = "DCCF6E"
+        # 見積書番号を生成
+        qupte_id = f"{quote_id_prefix}-Q-{self._get_quote_id()}"
+
+        today_datetime = datetime.now()
+        self.quote_gsheet_data = {
+            "customer_name": TORIHIKISAKI_NAME,
+            "quote_id": qupte_id,
+            "title": "ガススプリング配管図作製費",
+            # 日付は実行時の日付を利用
+            "quote_date": today_datetime.strftime(START_DATE_FORMAT),
+            "note": quote_note,
+            "item_table": [hinmoku],
+        }
 
 
 def generate_anken_quote_list(estimate_calcsheets: list[dict]) -> list[AnkenQuote]:
@@ -204,8 +288,14 @@ def update_msm_anken_schedule_sheet(
     msmankenmaplist.msmankenmap_list.append(msmanken_info)
 
     export_pd = msmankenmaplist.generate_update_sheet_values()
-    before_pd = get_schedule_table_area(schedule_spreadsheet_table_range, gsheet_service)
-    update_data = generate_update_valueranges(schedule_spreadsheet_table_range, before_pd, export_pd)
+
+    # TODO:2024-02-05 ここのtable_rangeは元のモジュールから呼び出したほうがシンプル
+    before_pd = get_schedule_table_area(
+        schedule_spreadsheet_table_range, gsheet_service
+    )
+    update_data = generate_update_valueranges(
+        schedule_spreadsheet_table_range, before_pd, export_pd
+    )
 
     print(f"update result:{update_data}")
 
@@ -253,7 +343,9 @@ class PrepareTask(BaseTask):
         if result is None:
             print("見積もり計算表が見つかりませんでした。終了します。")
             # google chatのエラーとして返す
-            return chat.card.genactionresponse_dialog("見積もり計算表が見つかりませんでした。終了します。")
+            return chat.card.genactionresponse_dialog(
+                "見積もり計算表が見つかりませんでした。終了します。"
+            )
 
         estimate_list_checkbox = chat.card.genwidget_checkboxlist(
             "見積もり一覧",
@@ -301,38 +393,78 @@ class MainTask(BaseTask):
         # MFクラウドで見積書作成
         for anken_quote in anken_quotes:
             # 見積書作成
+
+            # googleスプレッドシートの見積書テンプレートを複製する
+            quote_file_id = googleapi.dupulicate_file(
+                gdrive_service,
+                QUOTE_TEMPLATE_GSHEET_ID,
+                f"見積書_{anken_quote.anken_number}.pdf",
+            )
+            # 見積書のファイル名と保存先を設定
+            # ファイル名:見積書_[会社名]_[型式]_[納期].pdf
+            quote_filename = f"見積書_{TORIHIKISAKI_NAME}_{anken_quote.anken_number}_{anken_quote.duration:%m%d}.pdf"
+            _ = googleapi.update_file(
+                gdrive_service,
+                file_id=quote_file_id,
+                body={"name": quote_filename},
+                add_parents=QUOTE_GSHEET_SAVE_DIR_IDS,
+                fields="id, parents",
+            )
+
+            # 見積書へanken_quoteの内容を記録
+            sheet_data_mapper.write_data_to_sheet(
+                gsheet_service,
+                quote_file_id,
+                anken_quote.quote_gsheet_data,
+            )
+
+            # 見積書のPDFをダウンロード
+            googleapi.export_pdf_by_driveexporturl(
+                google_cred.token,
+                quote_file_id,
+                export_qupte_dirpath / quote_filename,
+                {
+                    "gid": "0",
+                    "size": "7",
+                    "portrait": "true",
+                    "fitw": "true",
+                    "gridlines": "false",
+                },
+            )
+
             # 品目をAPIで作成
-            created_item_result = create_item(
-                mfci_session, anken_quote.mfci_quote_item_json
-            )
+            # created_item_result = create_item(
+            #     mfci_session, anken_quote.mfci_quote_item_json
+            # )
             # 空の見積書作成
-            created_quote_result = create_quote(
-                mfci_session, anken_quote.mfci_quote_json
-            )
+            # created_quote_result = create_quote(
+            #     mfci_session, anken_quote.mfci_quote_json
+            # )
 
             # 最後に品目を見積書へ追加
-            attach_item_into_quote(
-                mfci_session,
-                created_quote_result["id"],
-                created_item_result["id"],
-            )
-
+            # attach_item_into_quote(
+            #     mfci_session,
+            #     created_quote_result["id"],
+            #     created_item_result["id"],
+            # )
             # errorなら終了する
-            if "errors" in created_quote_result:
-                print("エラーが発生しました。詳細はレスポンスを確認ください")
-                pprint(created_quote_result)
-                sys.exit(0)
+            # if "errors" in created_quote_result:
+            #     print("エラーが発生しました。詳細はレスポンスを確認ください")
+            #     pprint(created_quote_result)
+            #     sys.exit(0)
 
             # PDFのファイル名はミスミの型式をつける
-            anken_quote.estimate_pdf_path = (
-                export_qupte_dirpath / f"見積書_{anken_quote.anken_number}.pdf"
+            # anken_quote.estimate_pdf_path = (
+            #     export_qupte_dirpath / f"見積書_{anken_quote.anken_number}.pdf"
+            # )
+            # download_quote_pdf(
+            #     mfci_session,
+            #     created_quote_result["pdf_url"],
+            #     anken_quote.estimate_pdf_path,
+            # )
+            print(
+                f"見積書のPDFをダウンロードしました。保存先:{anken_quote.estimate_pdf_path}"
             )
-            download_quote_pdf(
-                mfci_session,
-                created_quote_result["pdf_url"],
-                anken_quote.estimate_pdf_path,
-            )
-            print(f"見積書のPDFをダウンロードしました。保存先:{anken_quote.estimate_pdf_path}")
 
             # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
             # TODO: 2023-04-20 ここは関数として切り出す -> helper.googleapi
@@ -366,7 +498,9 @@ class MainTask(BaseTask):
             # スレッドが見つからない場合は終了
             if not threads:
                 print("スレッドが見つかりませんでした。メール返信作成を中止します。")
-                return {"result": "スレッドが見つかりませんでした。メール返信作成を中止します。"}
+                return {
+                    "result": "スレッドが見つかりませんでした。メール返信作成を中止します。"
+                }
 
             # TODO:2023-04-18 ここは複数スレッドがあった場合は選択制にする。
             # 出ない場合は一番上のものを使いますと、タイトルを出して確認させる。
@@ -403,7 +537,9 @@ class MainTask(BaseTask):
             "result_card__generate_quote",
             header=bot_header,
             widgets=[
-                chat.card.genwidget_textparagraph(f"見積書を作成しました。: {result.get('id')}"),
+                chat.card.genwidget_textparagraph(
+                    f"見積書を作成しました。: {result.get('id')}"
+                ),
             ],
         )
         # send_message_body.update({"actionResponse": {"type": "NEW_MESSAGE"}})

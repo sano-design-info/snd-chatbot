@@ -689,7 +689,10 @@ def dupulicate_file(
 
 # GoogleドライブのエクスポートURLを元にしたファイルダウンロード
 def export_pdf_by_driveexporturl(
-    token: str, file_id: str, save_path: Path, query: dict = None
+    token: str,
+    file_id: str,
+    save_path: Path,
+    query_param: dict | None = None,
 ) -> None:
     """
     GoogleドライブのエクスポートURLを元に、PDFファイルをダウンロードします。
@@ -699,23 +702,41 @@ def export_pdf_by_driveexporturl(
     通常はAPI経由でダウンロードしますが、pdfの場合はエクスポートのパラメーター指定をして
     のダウンロードは対応していません。（例えば、pdf, 横向きでエクスポートはできない）
 
-    現時点で、特定のワークロードでのみ動作確認しています。エクスポートURLのクエリパラメータは以下の通りです。
+    クエリパラメーターを入れることで、エクスポートパラメータを指定できます。PDFはデフォルトなので指定なしでOKです。
 
-    * format=pdf
-    * portrait=false : 横向きにする
+    その他パラメーター例:
 
-    TODO:2023-06-05 クエリパラメータの指定を引数で行えるようにする
+    'gid' - これを省略すると、すべての表示中のシートがエクスポートされます。単一のシートをエクスポートするには、シートIDを追加してください。
+    'format' - ファイルタイプ。この場合はPDFです。
+    'size' - 用紙サイズ：, 0 (レター), 1 (タブロイド), 2 (リーガル), 3 (ステートメント), 4 (エグゼクティブ), 5 (フォリオ), 6 (A3), 7 (A4), 8 (A5), 9 (B4), 10 (B5)
+    'portrait' - ページの向き（ポートレート true/false、landscapeは使用しない）
+    'fitw' - 幅に合わせる、GUIでのように。高さに合わせるやページに合わせるのパラメーターはまだ見つかっていませんが、「fith」かもしれません？
+    'top_margin' - インチ単位でマージンを設定します。bottom_、left_、right_も同様です。4つのマージンが全て存在する場合にのみ機能するようです。
+    'gridlines' - フォーマット > グリッド線を表示する。 (true/false)
+    'printnotes' - フォーマット > ノートを表示する。 (true/false)
+    ページ順序に関するパラメーターを追加できる方がいれば、とても役立ちます。
+    'horizontal_alignment' - フォーマット > 配置 > 水平。 (LEFT/CENTER/RIGHT)
+    'vertical_alignment' - フォーマット > 配置 > 垂直。 (TOP/MIDDLE/BOTTOM)
+    'pagenum' - ヘッダー＆フッター > ページ番号。ページ番号を非表示にするにはUNDEFINEDを使用します。 (LEFT/CENTER/RIGHT/UNDEFINED)
+    'printtitle' - ヘッダー＆フッター > ワークブックのタイトル。 (true/false)
+    'sheetnames' - ヘッダー＆フッター > シート名。 (true/false)
+    現在の日付、現在の時刻、あるいはカスタムフィールドに関するパラメーターを追加できる方がいれば、とても役立ちます。
 
     args:
         token: Google APIのトークン
         file_id: ファイルID
         save_path: PDFファイルの保存先
+        query: クエリパラメータ 辞書が入る。:デフォルトはNone。
     return:
         なし
     """
+    # クエリパラメーターを元にURLパラメーターを作成
+    export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=pdf"
+    if query_param:
+        query_str = "&".join([f"{k}={v}" for k, v in query_param.items()])
 
-    # エクスポートするURLを生成
-    export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=pdf&portrait=false"
+        # クエリからエクスポートするURLを生成
+        export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=pdf&{query_str}"
 
     # requestsでダウンロードする。stream指定でチャンクサイズは1MBでダウンロードする
     params = {"access_token": token}
@@ -738,6 +759,7 @@ def append_sheet(
     append_values: list[list],
     value_input_option="RAW",
     insert_data_option="INSERT_ROWS",
+    include_values_in_response=False,
 ) -> list[dict]:
     """
     Gooogle Spreadsheet APIを使用して、スプレッドシートに値を追加します。
@@ -748,6 +770,7 @@ def append_sheet(
         append_values: 追加する値のリスト
         value_input_option: 値の入力方法
         insert_data_option: データの挿入方法
+        include_values_in_response: レスポンスに値を含めるかどうか。デフォルトは無効（False）
     return:
         APIからのレスポンス
     """
@@ -760,6 +783,7 @@ def append_sheet(
             body={"values": append_values},
             valueInputOption=value_input_option,
             insertDataOption=insert_data_option,
+            includeValuesInResponse=include_values_in_response,
         )
     ).execute()
 
