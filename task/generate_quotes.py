@@ -416,16 +416,17 @@ class MainTask(BaseTask):
                 quote_file_id = googleapi.dupulicate_file(
                     gdrive_service,
                     QUOTE_TEMPLATE_GSHEET_ID,
-                    f"見積書_{anken_quote.anken_number}",
+                    quote_filestem := f"見積書_{anken_quote.anken_number}",
                 )
-                # 見積書のファイル名と保存先を設定
-                # ファイル名:見積書_[納期].pdf
-                quote_filename = f"見積書_{anken_quote.anken_number}.pdf"
 
+                # ファイル名:見積書_[納期].pdf
+                quote_filename = f"{quote_filestem}.pdf"
+
+                # 見積書のファイル名と保存先を設定
                 _ = googleapi.update_file(
                     gdrive_service,
                     file_id=quote_file_id,
-                    body={"name": quote_filename},
+                    body=None,
                     add_parents=QUOTE_GSHEET_SAVE_DIR_IDS,
                     fields="id, parents",
                 )
