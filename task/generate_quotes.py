@@ -64,8 +64,8 @@ QUOTE_GSHEET_SAVE_DIR_IDS = SCRIPT_CONFIG.get("QUOTE_GSHEET_SAVE_DIR_IDS")
 QUOTE_PDF_SAVE_DIR_IDS = SCRIPT_CONFIG.get("QUOTE_PDF_SAVE_DIR_IDS")
 
 
-export_qupte_dirpath = EXPORTDIR_PATH / "quote"
-export_qupte_dirpath.mkdir(parents=True, exist_ok=True)
+export_quote_dirpath = EXPORTDIR_PATH / "quote"
+export_quote_dirpath.mkdir(parents=True, exist_ok=True)
 
 # TODO:2023-09-14 これは使っている部分へ戻す。これ以外で使っていないので、ここで定義する必要はない
 # 2020-01-01 のフォーマットのみ受け付ける
@@ -419,9 +419,6 @@ class MainTask(BaseTask):
                     quote_filestem := f"見積書_{anken_quote.anken_number}",
                 )
 
-                # ファイル名:見積書_[納期].pdf
-                quote_filename = f"{quote_filestem}.pdf"
-
                 # 見積書のファイル名と保存先を設定
                 _ = googleapi.update_file(
                     gdrive_service,
@@ -438,11 +435,14 @@ class MainTask(BaseTask):
                     anken_quote.quote_gsheet_data,
                 )
 
+                # ファイル名:見積書_[納期].pdf
+                quote_filename = f"{quote_filestem}.pdf"
+
                 # 見積書のPDFをダウンロード
                 googleapi.export_pdf_by_driveexporturl(
                     google_cred.token,
                     quote_file_id,
-                    export_qupte_dirpath / quote_filename,
+                    export_quote_dirpath / quote_filename,
                     {
                         "gid": "0",
                         "size": "7",
@@ -455,7 +455,7 @@ class MainTask(BaseTask):
                 # 見積書のPDFをGoogleドライブへ保存
                 upload_pdf_result = googleapi.upload_file(
                     gdrive_service,
-                    export_qupte_dirpath / quote_filename,
+                    export_quote_dirpath / quote_filename,
                     "application/pdf",
                     "application/pdf",
                     QUOTE_PDF_SAVE_DIR_IDS,
@@ -463,20 +463,16 @@ class MainTask(BaseTask):
 
                 # 見積書のGoogleスプレッドシートとPDFのURLを見積管理表に記録
 
+                # 見積管理表を更新する。B列から[ファイル名, 見積書:Gsheet のIDからURL, 見積書:GDrive PDFのIDからURL]
+                # 見積管理表に番号を追加したupdatedRows（updated_quote_manage_cell_address）を使うがB列以降を使う
                 # 生成した見積番号のセルアドレスからB列に置き換えて取得。AのみをBにする
                 # 例: updated_quote_manage_cell_address = "見積書管理!A2:D2" -> "見積書管理!B2:D2"
-                insert_range_in_quote_manage_sheet = (
-                    get_updated_cell_address_by_quote_manage_gsheet(
-                        updated_quote_manage_gsheet
-                    ).replace("A", "B")
-                )
-
-                # 見積管理表を更新する。B列からファイル名、見積書:Gsheet のIDからURL, 見積書:GDrive PDFのIDからURL
-                # 見積管理表に番号を追加したupdatedRows（updated_quote_manage_cell_address）を使うがB列以降を使う
                 _ = googleapi.update_sheet(
                     gsheet_service,
                     QUOTE_FILE_LIST_GSHEET_ID,
-                    insert_range_in_quote_manage_sheet,
+                    get_updated_cell_address_by_quote_manage_gsheet(
+                        updated_quote_manage_gsheet
+                    ).replace("A", "B"),
                     [
                         [
                             quote_filename,
