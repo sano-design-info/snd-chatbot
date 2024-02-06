@@ -12,14 +12,15 @@ from zoneinfo import ZoneInfo
 
 import chat.card
 from api import googleapi
-from api.mfcloud_api import (
-    MFCIClient,
-    attach_billingitem_into_billing,
-    create_invoice_template_billing,
-    create_item,
-    download_billing_pdf,
-    get_quotes,
-)
+
+# from api.mfcloud_api import (
+#     MFCIClient,
+#     attach_billingitem_into_billing,
+#     create_invoice_template_billing,
+#     create_item,
+#     download_billing_pdf,
+#     # get_quotes,
+# )
 from helper import EXPORTDIR_PATH, ROOTDIR, chatcard, load_config
 from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
 from task import BaseTask, ProcessData
@@ -29,12 +30,17 @@ START_DATE_FORMAT = "%Y-%m-%d"
 
 
 config = load_config.CONFIG
-MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
-QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
-SCRIPT_CONFIG = config.get("get_billing")
+# MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
+# QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
 
+SCRIPT_CONFIG = config.get("get_billing")
+GENERATE_QUOTES_CONFIG = config.get("generate_quotes")
 
 # 請求書生成:
+
+# 見積書のファイル一覧を記録するGoogleスプレッドシートのID
+QUOTE_FILE_LIST_GSHEET_ID = GENERATE_QUOTES_CONFIG.get("QUOTE_FILE_LIST_GSHEET_ID")
+
 # 請求書のファイル一覧を記録するGoogleスプレッドシートのID
 # https://docs.google.com/spreadsheets/d/1_x1yBpm34FWJ1shXQeUZVwwqp8CdT34t9zH5T-urzHs
 INVOICE_FILE_LIST_GSHEET_ID = SCRIPT_CONFIG.get("INVOICE_FILE_LIST_GSHEET_ID")
@@ -74,7 +80,7 @@ google_cred = googleapi.get_cledential(googleapi.API_SCOPES)
 gmail_service = build("gmail", "v1", credentials=google_cred)
 
 # mfcloudのセッション作成
-mfcl_session = MFCIClient().get_session()
+# mfcl_session = MFCIClient().get_session()
 
 # チャット用の認証情報を取得
 google_sa_cred = googleapi.get_cledential_by_serviceaccount(googleapi.CHAT_API_SCOPES)
@@ -140,97 +146,149 @@ class BillingInfo:
     billing_title: str
     hinmoku_title: str
 
+def convert_dict_to_gsheet_tamplate(billing_number, hinmoku_name, hinmoku_duration, hinmoku_price) -> dict:
 
-def generate_json_mfci_billing_item(billing_info: BillingInfo) -> dict:
-    """
-    請求情報を元に、MFクラウド請求書APIで使う請求書書向け品目用のjson文字列を生成する。
-    結果は辞書形式で返す。
-    """
+    #     item_json_template = """
+    #     {
+    #         "name": "品目",
+    #         "detail": "",
+    #         "unit": "0",
+    #         "price": 0,
+    #         "quantity": 1,
+    #         "excise": "ten_percent"
+    #     }
+    #     """
 
-    item_json_template = """
-    {
-        "name": "品目",
-        "detail": "",
-        "unit": "0",
-        "price": 0,
+    #     billing_json_template = """
+    #     {
+    #         "department_id": "",
+    #         "billing_date": "2020-05-08",
+    #         "due_date": "2020-05-08",
+    #         "title": "請求書タイトル",
+    #         "tags": "佐野設計自動生成",
+    #         "note": "詳細は別添付の明細をご確認ください",
+    #         "items": [
+    #         ]
+    #     }
+    # 見積書へ書き込むデータを作る
+    # ここで作成するデータは、見積書のテンプレートに合わせたデータを作成する
+
+    hinmoku = {
+        "name": hinmoku_name,
+        "detail": f"納期 {hinmoku_duration:%m/%d}",
+        "price": int(hinmoku_price),
         "quantity": 1,
-        "excise": "ten_percent"
+        "zeiritu": "10%",
     }
-    """
 
-    # jsonでロードする
-    billing_item = json.loads(item_json_template)
+    # TODO:2024-02-05 これは設定にする
+    billing_id_prefix = "DCCF6E"
+    # 見積書番号を生成
+    # TODO: 2024-02-05 ここのget_billing_idはMainTask側で処理して情報をanken_quoteに入れる
+    billing_id = f"{billing_id_prefix}-I-{billing_number}"
 
-    # 結果をjsonで返す
-    billing_item["name"] = "{} ガススプリング配管図".format(billing_info.hinmoku_title)
-    billing_item["quantity"] = 1
-    billing_item["price"] = int(billing_info.price)
-    billing_item["name"] = billing_info.hinmoku_title
-
-    return billing_item
-
-
-def generate_billing_info_json(billing_info: BillingInfo) -> dict:
-    """
-    MFクラウド請求書APIで使う請求書作成のjsonを生成する
-    結果は辞書形式で返す。
-    """
-
-    billing_json_template = """
-    {
-        "department_id": "",
-        "billing_date": "2020-05-08",
-        "due_date": "2020-05-08",
-        "title": "請求書タイトル",
-        "tags": "佐野設計自動生成",
+    today_datetime = datetime.now()
+    return {
+        "customer_name": TORIHIKISAKI_NAME,
+        "billing_id": billing_id,
+        "title": "ガススプリング配管図作製費",
+        # 日付は実行時の日付を利用
+        "billing_date": today_datetime.strftime(START_DATE_FORMAT),
+        "due_date": ""
         "note": "詳細は別添付の明細をご確認ください",
-        "items": [
-        ]
+        "item_table": [hinmoku],c
     }
-    """
-    # jsonでロードする
-    billing_info_json = json.loads(billing_json_template)
 
-    # department_idはミスミのものを利用
-    billing_info_json["department_id"] = MISUMI_TORIHIKISAKI_ID
+# def generate_json_mfci_billing_item(billing_info: BillingInfo) -> dict:
+#     """
+#     請求情報を元に、MFクラウド請求書APIで使う請求書書向け品目用のjson文字列を生成する。
+#     結果は辞書形式で返す。
+#     """
 
-    # 各情報を入れる
-    billing_info_json["title"] = billing_info.billing_title
-    billing_info_json["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
+#     item_json_template = """
+#     {
+#         "name": "品目",
+#         "detail": "",
+#         "unit": "0",
+#         "price": 0,
+#         "quantity": 1,
+#         "excise": "ten_percent"
+#     }
+#     """
 
-    # due_dateは今月末にする
-    # ref: https://zenn.dev/wtkn25/articles/python-relativedelta#%E6%9C%88%E5%88%9D%E3%80%81%E6%9C%88%E6%9C%AB%E3%80%81%E5%85%88%E6%9C%88%E5%88%9D%E3%80%81%E5%85%88%E6%9C%88%E6%9C%AB%E3%80%81%E7%BF%8C%E6%9C%88%E5%88%9D%E3%80%81%E7%BF%8C%E6%9C%88%E6%9C%AB
-    billing_info_json["due_date"] = (
-        today_datetime + relativedelta(months=+1, day=1, days=-1)
-    ).strftime(START_DATE_FORMAT)
+#     # jsonでロードする
+#     billing_item = json.loads(item_json_template)
 
-    return billing_info_json
+#     # 結果をjsonで返す
+#     billing_item["name"] = "{} ガススプリング配管図".format(billing_info.hinmoku_title)
+#     billing_item["quantity"] = 1
+#     billing_item["price"] = int(billing_info.price)
+#     billing_item["name"] = billing_info.hinmoku_title
+
+#     return billing_item
 
 
-# 見積書一覧を元にテンプレの行を生成
-def generate_billing_pdf(mfci_session, billing_info: BillingInfo) -> Path:
-    """
-    MFクラウド請求書APIを使って請求書を生成する。戻り値はpdfファイルのパス
-    """
+# def generate_billing_info_json(billing_info: BillingInfo) -> dict:
+#     """
+#     MFクラウド請求書APIで使う請求書作成のjsonを生成する
+#     結果は辞書形式で返す。
+#     """
 
-    # 空の請求書作成
-    billing_res = create_invoice_template_billing(
-        mfci_session, generate_billing_info_json(billing_info)
-    )
-    # 品目を作成
-    billing_item_data = generate_json_mfci_billing_item(billing_info)
-    billing_item_res = create_item(mfci_session, billing_item_data)
-    # 請求書へ品目を追加する
-    attach_billingitem_into_billing(
-        mfci_session, billing_res["id"], billing_item_res["id"]
-    )
+#     billing_json_template = """
+#     {
+#         "department_id": "",
+#         "billing_date": "2020-05-08",
+#         "due_date": "2020-05-08",
+#         "title": "請求書タイトル",
+#         "tags": "佐野設計自動生成",
+#         "note": "詳細は別添付の明細をご確認ください",
+#         "items": [
+#         ]
+#     }
+#     """
+#     # jsonでロードする
+#     billing_info_json = json.loads(billing_json_template)
 
-    print("請求書に変換しました")
+#     # department_idはミスミのものを利用
+#     billing_info_json["department_id"] = MISUMI_TORIHIKISAKI_ID
 
-    # pdfファイルのバイナリをgetする
-    download_billing_pdf(mfci_session, billing_res["pdf_url"], BILLING_PDFFILEPATH)
+#     # 各情報を入れる
+#     billing_info_json["title"] = billing_info.billing_title
+#     billing_info_json["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
 
-    return BILLING_PDFFILEPATH
+#     # due_dateは今月末にする
+#     # ref: https://zenn.dev/wtkn25/articles/python-relativedelta#%E6%9C%88%E5%88%9D%E3%80%81%E6%9C%88%E6%9C%AB%E3%80%81%E5%85%88%E6%9C%88%E5%88%9D%E3%80%81%E5%85%88%E6%9C%88%E6%9C%AB%E3%80%81%E7%BF%8C%E6%9C%88%E5%88%9D%E3%80%81%E7%BF%8C%E6%9C%88%E6%9C%AB
+#     billing_info_json["due_date"] = (
+#         today_datetime + relativedelta(months=+1, day=1, days=-1)
+#     ).strftime(START_DATE_FORMAT)
+
+#     return billing_info_json
+
+
+# # 見積書一覧を元にテンプレの行を生成
+# def generate_billing_pdf(mfci_session, billing_info: BillingInfo) -> Path:
+#     """
+#     MFクラウド請求書APIを使って請求書を生成する。戻り値はpdfファイルのパス
+#     """
+
+#     # 空の請求書作成
+#     billing_res = create_invoice_template_billing(
+#         mfci_session, generate_billing_info_json(billing_info)
+#     )
+#     # 品目を作成
+#     billing_item_data = generate_json_mfci_billing_item(billing_info)
+#     billing_item_res = create_item(mfci_session, billing_item_data)
+#     # 請求書へ品目を追加する
+#     attach_billingitem_into_billing(
+#         mfci_session, billing_res["id"], billing_item_res["id"]
+#     )
+
+#     print("請求書に変換しました")
+
+#     # pdfファイルのバイナリをgetする
+#     download_billing_pdf(mfci_session, billing_res["pdf_url"], BILLING_PDFFILEPATH)
+
+#     return BILLING_PDFFILEPATH
 
 
 def set_border_style(
@@ -392,13 +450,20 @@ def set_draft_mail(attchment_filepaths: list[Path]) -> dict:
     )
 
 
+# Googleスプレッドシートの見積書一覧から最後尾100件の見積書スプレッドシートのURLを取得する
+def get_quotes_by_(mfci_session, per_page_length: int) -> dict:
+
+
 class PrepareTask(BaseTask):
     def execute_task(self) -> list[tuple[QuoteData, bool]]:
         # 見積書一覧を取得
-        quote_result = get_quotes(
-            mfcl_session,
-            QUOTE_PER_PAGE,
-        )
+        # TODO: 2024-02-06 MFクラウド利用と同じように、見積の最後尾から100件までの見積を取得するようにする
+        # TODO: 2024-02-06 この100件を取り出す方法は本来は動作が微妙で、見積書の納期日をもとに40日前までの見積書を取得するようにするほうがベスト。もしくはスケジュール表の実納期日をもとにすると良さそう
+
+        # quote_result = get_quotes(
+        #     mfcl_session,
+        #     QUOTE_PER_PAGE,
+        # )
 
         # TODO:2023-10-16 [リファクタリング]日付のフィルターと、デフォルトチェックを同時に行うといいかも。
         # is_target_dateをis_date_rangeに変更する
