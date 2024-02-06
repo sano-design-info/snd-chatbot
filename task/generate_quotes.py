@@ -114,8 +114,8 @@ class AnkenQuote(EstimateCalcSheetInfo):
         hinmoku = {
             "name": f"{self.anken_number} ガススプリング配管図",
             "detail": f"納期 {self.duration:%m/%d}",
-            "price": 0,
-            "quantity": int(self.price),
+            "price": int(self.price),
+            "quantity": 1,
             "zeiritu": "10%",
         }
 
@@ -415,6 +415,7 @@ class MainTask(BaseTask):
             update_msm_anken_schedule_sheet(anken_quote, gsheet_service)
 
         # TODO:2023-09-28 下書き生成は、上の見積書が生成できたら実行するタスクになる。
+        # TODO: 2024-02-06 以前に複数の案件ベース番号があった時に、二番めのメールが作成できなかったことがあるので検証する
 
         # メールの下書きを生成。案件のベース番号をもとにグルーピングをして一つのメールに複数の見積を添付する
         quote_groups = itertools.groupby(anken_quotes, lambda x: x.anken_base_number)
