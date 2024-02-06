@@ -33,12 +33,37 @@ MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
 QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
 SCRIPT_CONFIG = config.get("get_billing")
 
+
+# 請求書生成:
+# 請求書のファイル一覧を記録するGoogleスプレッドシートのID
+# https://docs.google.com/spreadsheets/d/1_x1yBpm34FWJ1shXQeUZVwwqp8CdT34t9zH5T-urzHs
+INVOICE_FILE_LIST_GSHEET_ID = SCRIPT_CONFIG.get("INVOICE_FILE_LIST_GSHEET_ID")
+# GoogleスプレッドシートのテンプレートID
+# https://docs.google.com/spreadsheets/d/1444u_Gu9-1VI2C5EmnX5uE3h-QwrTrroGpQzZNupzNI
+INVOICE_TEMPLATE_GSHEET_ID = SCRIPT_CONFIG.get("INVOICE_TEMPLATE_GSHEET_ID")
+# テンプレートに入力するセルマッピング・JSONファイルのパス
+INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATH = SCRIPT_CONFIG.get(
+    "INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATH"
+)
+# 請求書ののGoogleスプレッドシート保存先
+# https://drive.google.com/drive/folders/1fM40M8T5Yhj16nfpLQ1i_oPcd0iJqFHt
+INVOICE_GSHEET_SAVE_DIR_IDS = SCRIPT_CONFIG.get("INVOICE_GSHEET_SAVE_DIR_IDS")
+# 請求書のPDF保存先
+# https://drive.google.com/drive/folders/1kYA0eGhNUhYPjkWiGRP018AR6yPs2PGD
+INVOICE_PDF_SAVE_DIR_IDS = SCRIPT_CONFIG.get("INVOICE_PDF_SAVE_DIR_IDS")
+
+# 各定数から全体で使う変数を作成
 export_billing_dirpath = EXPORTDIR_PATH / "billing"
 export_billing_dirpath.mkdir(parents=True, exist_ok=True)
 
+with open(INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATH, "r", encoding="utf-8") as f:
+    invoice_template_cell_mapping_dict = json.load(f)
+
 # 本日の日付を全体で使うためにここで宣言
 today_datetime = datetime.now()
-BILLING_PDFFILEPATH = export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
+BILLING_PDFFILEPATH = (
+    export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
+)
 BILLING_LIST_EXCELPATH = (
     export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
 )

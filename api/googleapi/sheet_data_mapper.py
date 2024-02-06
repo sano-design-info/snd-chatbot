@@ -2,7 +2,10 @@ from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
 
 
-def write_data_to_sheet(gsheet_service: Resource, spreadsheet_id, data, cell_mapping):
+# TODO:2024-02-06 cell_mappingはdictにするかjsonstrとするか検討
+def write_data_to_sheet(
+    gsheet_service: Resource, spreadsheet_id, data: dict, cell_mapping: dict
+):
     """
     Google Sheetsにデータを書き込む
 

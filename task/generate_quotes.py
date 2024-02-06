@@ -2,7 +2,7 @@ import itertools
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 # from pprint import pprint
 
@@ -13,13 +13,6 @@ import chat.card
 from api import googleapi
 from api.googleapi import sheet_data_mapper
 
-# from api.mfcloud_api import (
-#     MFCIClient,
-#     attach_item_into_quote,
-#     create_item,
-#     create_quote,
-#     download_quote_pdf,
-# )
 from helper import EXPORTDIR_PATH, chatcard, load_config
 from itemparser import (
     EstimateCalcSheetInfo,
@@ -47,8 +40,6 @@ ARCHIVED_ESTIMATECALCSHEET_DIR_ID = SCRIPT_CONFIG.get(
 )
 MAIL_TEMPLATE_BODY_STR = SCRIPT_CONFIG.get("mail_template_body")
 
-MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
-
 # 見積書のGoogleスプレッドシート関連
 # 見積書のファイル一覧を記録するGoogleスプレッドシートのID
 QUOTE_FILE_LIST_GSHEET_ID = SCRIPT_CONFIG.get("QUOTE_FILE_LIST_GSHEET_ID")
@@ -63,9 +54,11 @@ QUOTE_GSHEET_SAVE_DIR_IDS = SCRIPT_CONFIG.get("QUOTE_GSHEET_SAVE_DIR_IDS")
 # 見積書のPDF保存先
 QUOTE_PDF_SAVE_DIR_IDS = SCRIPT_CONFIG.get("QUOTE_PDF_SAVE_DIR_IDS")
 
-
+# 定数から全体に使う変数を作成
 export_quote_dirpath = EXPORTDIR_PATH / "quote"
 export_quote_dirpath.mkdir(parents=True, exist_ok=True)
+with open(QUOTE_TEMPLATE_CELL_MAPPING_JSON_PATH, "r", encoding="utf-8") as f:
+    quote_template_cell_mapping_dict = json.load(f)
 
 # TODO:2023-09-14 これは使っている部分へ戻す。これ以外で使っていないので、ここで定義する必要はない
 # 2020-01-01 のフォーマットのみ受け付ける
@@ -78,9 +71,6 @@ google_cred = googleapi.get_cledential(googleapi.API_SCOPES)
 gdrive_service = build("drive", "v3", credentials=google_cred)
 gmail_service = build("gmail", "v1", credentials=google_cred)
 gsheet_service = build("sheets", "v4", credentials=google_cred)
-
-# mfcloudのセッション作成
-# mfci_session = MFCIClient().get_session()
 
 # チャット用の認証情報を取得
 google_sa_cred = googleapi.get_cledential_by_serviceaccount(googleapi.CHAT_API_SCOPES)
@@ -99,8 +89,6 @@ class AnkenQuote(EstimateCalcSheetInfo):
     """
 
     estimate_pdf_path: Path = field(init=False, default=None)
-    # mfci_quote_json: dict = field(init=False, default=None)
-    # mfci_quote_item_json: dict = field(init=False, default=None)
     quote_gsheet_data = field(init=False, default=None)
     updated_quote_manage_cell_address: str = field(init=False, default=None)
 
@@ -119,83 +107,7 @@ class AnkenQuote(EstimateCalcSheetInfo):
             f"見積情報: 型式:{self.anken_number} 日時:{self.duration} 価格:{self.price}"
         )
 
-    def _convert_json_mfci_quote_item(self) -> None:
-        """
-        見積情報を元に、MFクラウド請求書APIで使う見積書向け品目用のjson文字列を生成する。
-        結果はmfci_quote_item_jsonへ入れる
-        """
-        item_json_template = """
-        {
-            "name": "品目",
-            "detail": "詳細",
-            "unit": "0",
-            "price": 0,
-            "quantity": 1,
-            "excise": "ten_percent"
-        }
-        """
-
-        # jsonでロードする
-        quote_item = json.loads(item_json_template)
-
-        # 結果をjsonで返す
-        quote_item["name"] = "{} ガススプリング配管図".format(self.anken_number)
-        quote_item["quantity"] = 1
-        quote_item["detail"] = f"納期 {self.duration:%m/%d}"
-        quote_item["price"] = int(self.price)
-
-        self.mfci_quote_item_json = quote_item
-
-    def _convert_json_mfci_quote(self) -> None:
-        """
-        見積情報を元に、MFクラウド請求書APIで使う見積書作成のjsonを生成する。
-        結果はmfci_quote_jsonへ入れる
-        """
-
-        today_datetime = datetime.now()
-        quote_json_template = """
-        {
-            "department_id": "",
-            "title": "ガススプリング配管図作製費",
-            "memo": "",
-            "quote_date": "2022-12-09",
-            "expired_date": "2022-12-10",
-            "note": "",
-            "tag_names": [
-                "佐野設計自動生成"
-            ]
-        }
-        """
-
-        # jsonでロードする
-        quote_data = json.loads(quote_json_template)
-
-        # department_id
-        quote_data["department_id"] = MISUMI_TORIHIKISAKI_ID
-        # 日付は実行時の日付を利用
-        quote_data["quote_date"] = today_datetime.strftime(START_DATE_FORMAT)
-        # 有効期限は１週間後
-        quote_data["expired_date"] = (today_datetime + timedelta(days=7)).strftime(
-            START_DATE_FORMAT
-        )
-
-        # LRは条件判断を行う
-        rh_flag = self.anken_number.split("-")[-1]
-        if rh_flag in ("RH", "LH") != 0:
-            # RHの場合はLH, LHの場合はRHの備考文章を作成
-            reverse_part_number = "MA-" + "-".join(self.anken_number.split("-")[0:-1])
-            if rh_flag == "RH":
-                reverse_part_number = reverse_part_number + "-LH"
-            else:
-                reverse_part_number = reverse_part_number + "-RH"
-
-            quote_data[
-                "note"
-            ] = f"本見積は{reverse_part_number}の対象側作図案件となります"
-
-        self.mfci_quote_json = quote_data
-
-    def convert_dict_to_gsheet_tamplate(self, quote_id) -> None:
+    def convert_dict_to_gsheet_tamplate(self, quote_number) -> None:
         # 見積書へ書き込むデータを作る
         # ここで作成するデータは、見積書のテンプレートに合わせたデータを作成する
 
@@ -224,7 +136,7 @@ class AnkenQuote(EstimateCalcSheetInfo):
         quote_id_prefix = "DCCF6E"
         # 見積書番号を生成
         # TODO: 2024-02-05 ここのget_quote_idはMainTask側で処理して情報をanken_quoteに入れる
-        qupte_id = f"{quote_id_prefix}-Q-{quote_id}"
+        qupte_id = f"{quote_id_prefix}-Q-{quote_number}"
 
         today_datetime = datetime.now()
         self.quote_gsheet_data = {
@@ -238,7 +150,7 @@ class AnkenQuote(EstimateCalcSheetInfo):
         }
 
 
-def get_quote_id_by_quote_manage_gsheet(updated_result_quote_manage_gsheet) -> str:
+def get_quote_number_by_quote_manage_gsheet(updated_result_quote_manage_gsheet) -> str:
     # 追加できた行のA列の値を取得
     return (
         updated_result_quote_manage_gsheet.get("updates")
@@ -405,9 +317,10 @@ class MainTask(BaseTask):
                     True,
                 )
                 # 見積書番号を取得
-                quote_id = get_quote_id_by_quote_manage_gsheet(
+                quote_id = get_quote_number_by_quote_manage_gsheet(
                     updated_quote_manage_gsheet
                 )
+                print(f"見積書の管理表から番号を生成しました。: {quote_id}")
 
                 # 見積書の情報を生成
                 anken_quote.convert_dict_to_gsheet_tamplate(quote_id)
@@ -433,6 +346,7 @@ class MainTask(BaseTask):
                     gsheet_service,
                     quote_file_id,
                     anken_quote.quote_gsheet_data,
+                    quote_template_cell_mapping_dict,
                 )
 
                 # ファイル名:見積書_[納期].pdf
@@ -481,6 +395,7 @@ class MainTask(BaseTask):
                         ]
                     ],
                 )
+                # TODO:2024-02-06 ここのestimate_pdf_pathは変数名が微妙なので、quote_pdf_pathとして変更する。影響範囲を確認すること
                 print(
                     f"見積書のPDFをダウンロードしました。保存先:{anken_quote.estimate_pdf_path}"
                 )
