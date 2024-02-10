@@ -13,14 +13,6 @@ from zoneinfo import ZoneInfo
 import chat.card
 from api import googleapi
 
-# from api.mfcloud_api import (
-#     MFCIClient,
-#     attach_billingitem_into_billing,
-#     create_invoice_template_billing,
-#     create_item,
-#     download_billing_pdf,
-#     # get_quotes,
-# )
 from helper import EXPORTDIR_PATH, ROOTDIR, chatcard, load_config
 from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
 from task import BaseTask, ProcessData
@@ -35,11 +27,19 @@ config = load_config.CONFIG
 
 SCRIPT_CONFIG = config.get("get_billing")
 GENERATE_QUOTES_CONFIG = config.get("generate_quotes")
+TORIHIKISAKI_NAME = config.get("general").get("TORIHIKISAKI_NAME")
 
 # 請求書生成:
 
 # 見積書のファイル一覧を記録するGoogleスプレッドシートのID
 QUOTE_FILE_LIST_GSHEET_ID = GENERATE_QUOTES_CONFIG.get("QUOTE_FILE_LIST_GSHEET_ID")
+# テンプレートに入力するセルマッピング・JSONファイルのパス
+QUOTE_TEMPLATE_CELL_MAPPING_JSON_PATH = GENERATE_QUOTES_CONFIG.get(
+    "QUOTE_TEMPLATE_CELL_MAPPING_JSON_PATH"
+)
+with open(QUOTE_TEMPLATE_CELL_MAPPING_JSON_PATH, "r", encoding="utf-8") as f:
+    quote_template_cell_mapping_dict = json.load(f)
+
 
 # 請求書のファイル一覧を記録するGoogleスプレッドシートのID
 # https://docs.google.com/spreadsheets/d/1_x1yBpm34FWJ1shXQeUZVwwqp8CdT34t9zH5T-urzHs
@@ -77,7 +77,9 @@ BILLING_LIST_EXCELPATH = (
 # API Session
 # TODO:2023-09-19 ここはtry exceptで囲む
 google_cred = googleapi.get_cledential(googleapi.API_SCOPES)
+gsheet_service = build("sheets", "v4", credentials=google_cred)
 gmail_service = build("gmail", "v1", credentials=google_cred)
+
 
 # mfcloudのセッション作成
 # mfcl_session = MFCIClient().get_session()
@@ -146,32 +148,12 @@ class BillingInfo:
     billing_title: str
     hinmoku_title: str
 
-def convert_dict_to_gsheet_tamplate(billing_number, hinmoku_name, hinmoku_duration, hinmoku_price) -> dict:
 
-    #     item_json_template = """
-    #     {
-    #         "name": "品目",
-    #         "detail": "",
-    #         "unit": "0",
-    #         "price": 0,
-    #         "quantity": 1,
-    #         "excise": "ten_percent"
-    #     }
-    #     """
-
-    #     billing_json_template = """
-    #     {
-    #         "department_id": "",
-    #         "billing_date": "2020-05-08",
-    #         "due_date": "2020-05-08",
-    #         "title": "請求書タイトル",
-    #         "tags": "佐野設計自動生成",
-    #         "note": "詳細は別添付の明細をご確認ください",
-    #         "items": [
-    #         ]
-    #     }
-    # 見積書へ書き込むデータを作る
-    # ここで作成するデータは、見積書のテンプレートに合わせたデータを作成する
+def convert_dict_to_gsheet_tamplate(
+    invoice_number, hinmoku_name, hinmoku_duration, hinmoku_price
+) -> dict:
+    # 請求書へ書き込むデータを作る
+    # ここで作成するデータは、INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATHのテンプレートに合わせたデータを作成する
 
     hinmoku = {
         "name": hinmoku_name,
@@ -182,113 +164,22 @@ def convert_dict_to_gsheet_tamplate(billing_number, hinmoku_name, hinmoku_durati
     }
 
     # TODO:2024-02-05 これは設定にする
-    billing_id_prefix = "DCCF6E"
-    # 見積書番号を生成
+    invoice_id_prefix = "DCCF6E"
+    # 請求書番号を生成
     # TODO: 2024-02-05 ここのget_billing_idはMainTask側で処理して情報をanken_quoteに入れる
-    billing_id = f"{billing_id_prefix}-I-{billing_number}"
+    invoice_id = f"{invoice_id_prefix}-I-{invoice_number}"
 
     today_datetime = datetime.now()
     return {
         "customer_name": TORIHIKISAKI_NAME,
-        "billing_id": billing_id,
+        "billing_id": invoice_id,
         "title": "ガススプリング配管図作製費",
         # 日付は実行時の日付を利用
         "billing_date": today_datetime.strftime(START_DATE_FORMAT),
-        "due_date": ""
+        "due_date": "",
         "note": "詳細は別添付の明細をご確認ください",
-        "item_table": [hinmoku],c
+        "item_table": [hinmoku],
     }
-
-# def generate_json_mfci_billing_item(billing_info: BillingInfo) -> dict:
-#     """
-#     請求情報を元に、MFクラウド請求書APIで使う請求書書向け品目用のjson文字列を生成する。
-#     結果は辞書形式で返す。
-#     """
-
-#     item_json_template = """
-#     {
-#         "name": "品目",
-#         "detail": "",
-#         "unit": "0",
-#         "price": 0,
-#         "quantity": 1,
-#         "excise": "ten_percent"
-#     }
-#     """
-
-#     # jsonでロードする
-#     billing_item = json.loads(item_json_template)
-
-#     # 結果をjsonで返す
-#     billing_item["name"] = "{} ガススプリング配管図".format(billing_info.hinmoku_title)
-#     billing_item["quantity"] = 1
-#     billing_item["price"] = int(billing_info.price)
-#     billing_item["name"] = billing_info.hinmoku_title
-
-#     return billing_item
-
-
-# def generate_billing_info_json(billing_info: BillingInfo) -> dict:
-#     """
-#     MFクラウド請求書APIで使う請求書作成のjsonを生成する
-#     結果は辞書形式で返す。
-#     """
-
-#     billing_json_template = """
-#     {
-#         "department_id": "",
-#         "billing_date": "2020-05-08",
-#         "due_date": "2020-05-08",
-#         "title": "請求書タイトル",
-#         "tags": "佐野設計自動生成",
-#         "note": "詳細は別添付の明細をご確認ください",
-#         "items": [
-#         ]
-#     }
-#     """
-#     # jsonでロードする
-#     billing_info_json = json.loads(billing_json_template)
-
-#     # department_idはミスミのものを利用
-#     billing_info_json["department_id"] = MISUMI_TORIHIKISAKI_ID
-
-#     # 各情報を入れる
-#     billing_info_json["title"] = billing_info.billing_title
-#     billing_info_json["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
-
-#     # due_dateは今月末にする
-#     # ref: https://zenn.dev/wtkn25/articles/python-relativedelta#%E6%9C%88%E5%88%9D%E3%80%81%E6%9C%88%E6%9C%AB%E3%80%81%E5%85%88%E6%9C%88%E5%88%9D%E3%80%81%E5%85%88%E6%9C%88%E6%9C%AB%E3%80%81%E7%BF%8C%E6%9C%88%E5%88%9D%E3%80%81%E7%BF%8C%E6%9C%88%E6%9C%AB
-#     billing_info_json["due_date"] = (
-#         today_datetime + relativedelta(months=+1, day=1, days=-1)
-#     ).strftime(START_DATE_FORMAT)
-
-#     return billing_info_json
-
-
-# # 見積書一覧を元にテンプレの行を生成
-# def generate_billing_pdf(mfci_session, billing_info: BillingInfo) -> Path:
-#     """
-#     MFクラウド請求書APIを使って請求書を生成する。戻り値はpdfファイルのパス
-#     """
-
-#     # 空の請求書作成
-#     billing_res = create_invoice_template_billing(
-#         mfci_session, generate_billing_info_json(billing_info)
-#     )
-#     # 品目を作成
-#     billing_item_data = generate_json_mfci_billing_item(billing_info)
-#     billing_item_res = create_item(mfci_session, billing_item_data)
-#     # 請求書へ品目を追加する
-#     attach_billingitem_into_billing(
-#         mfci_session, billing_res["id"], billing_item_res["id"]
-#     )
-
-#     print("請求書に変換しました")
-
-#     # pdfファイルのバイナリをgetする
-#     download_billing_pdf(mfci_session, billing_res["pdf_url"], BILLING_PDFFILEPATH)
-
-#     return BILLING_PDFFILEPATH
 
 
 def set_border_style(
@@ -450,21 +341,87 @@ def set_draft_mail(attchment_filepaths: list[Path]) -> dict:
     )
 
 
-# Googleスプレッドシートの見積書一覧から最後尾100件の見積書スプレッドシートのURLを取得する
-def get_quotes_by_(mfci_session, per_page_length: int) -> dict:
+def get_quote_gsheet_by_quote_list_gsheet(
+    gsheet_service, per_page_length: int
+) -> list | None:
+    # Googleスプレッドシートの見積書一覧をみて、最後尾から必要な件数の見積書スプレッドシートのURLリストを取得する
+
+    # 見積計算表の生成元シートの最大行範囲を取得
+    range_name = "見積書管理!D2:D"
+    result = (
+        gsheet_service.spreadsheets()
+        .values()
+        .get(spreadsheetId=QUOTE_FILE_LIST_GSHEET_ID, range=range_name)
+        .execute()
+    )
+    values = result.get("values", [])
+
+    if not values:
+        return None
+    else:
+        # 最後の行を取得
+        last_row = len(values)
+        print(f"{range_name} 最後の行: {last_row}")
+        return values[last_row - per_page_length : last_row]
+
+
+def get_values_by_range(
+    gsheet_service, spreadsheet_id, name_and_range_dict: dict
+) -> dict:
+    """{"意味名":"セル番号"}の辞書をもとに、Googleスプレッドシートの値を取得する。バッチで複数getする
+
+    戻り値は、{"意味名": [[セルの値]]}の辞書
+    """
+    result = (
+        gsheet_service.spreadsheets()
+        .values()
+        .batchGet(spreadsheetId=spreadsheet_id, ranges=name_and_range_dict.values())
+        .execute()
+    )
+    # 取得した値を辞書にして返す
+    return {
+        key: value.get("values")
+        for key, value in zip(name_and_range_dict, result.get("valueRanges"))
+    }
 
 
 class PrepareTask(BaseTask):
     def execute_task(self) -> list[tuple[QuoteData, bool]]:
         # 見積書一覧を取得
-        # TODO: 2024-02-06 MFクラウド利用と同じように、見積の最後尾から100件までの見積を取得するようにする
-        # TODO: 2024-02-06 この100件を取り出す方法は本来は動作が微妙で、見積書の納期日をもとに40日前までの見積書を取得するようにするほうがベスト。もしくはスケジュール表の実納期日をもとにすると良さそう
 
-        # quote_result = get_quotes(
-        #     mfcl_session,
-        #     QUOTE_PER_PAGE,
-        # )
+        # TODO: 2024-02-06 この100件を取り出す方法は本来は動作が微妙
+        # 見積書の納期日をもとに40日前までの見積書を取得するようにするほうがベスト。
+        # もしくはスケジュール表の実納期日をもとにすると良さそう
 
+        # 見積管理表の最後尾100件の見積書スプレッドシートのURLリストを取得する
+        # URL（https://docs.google.com/spreadsheets/d/fasfdasfa_IDS_fsdfadsfa）からID(fasfdasfa_IDS_fsdfadsfa)を取得する
+        quote_gsheet_id_list_under_100 = [
+            i[0].split("/")[-1]
+            for i in get_quote_gsheet_by_quote_list_gsheet(gsheet_service, 100)
+        ]
+
+        # 見積スプレッドシートURLから 見積書の品目名と納期と金額を取得。品目は最初の1行のみ取得。
+        # 情報のセルアドレスはテンプレートのセルマッピングに従う。
+        hinmoku_table_celladdr_column = quote_template_cell_mapping_dict.get(
+            "tables"
+        ).get("item_table")
+        hinmoku_table_startrow = (
+            quote_template_cell_mapping_dict.get("tables")
+            .get("item_table")
+            .get("startRow")
+        )
+        hinmoku_name_and_range_dict = {
+            "hinmoku_name": f"{hinmoku_table_celladdr_column}{hinmoku_table_startrow}",
+            "hinmoku_duration": f"{hinmoku_table_celladdr_column}{hinmoku_table_startrow}",
+            "hinmoku_price": f"{hinmoku_table_celladdr_column}{hinmoku_table_startrow}",
+        }
+        # URLリストからAPIで見積書の情報を取得。GoogleスプレッドシートのIDから情報を取得する。
+        quote_data_by_gsheet = [
+            get_values_by_range(gsheet_service, id, hinmoku_name_and_range_dict)
+            for id in quote_gsheet_id_list_under_100
+        ]
+
+        # TODO: 2024-02-10 続きは40日分の取得から。
         # TODO:2023-10-16 [リファクタリング]日付のフィルターと、デフォルトチェックを同時に行うといいかも。
         # is_target_dateをis_date_rangeに変更する
         # is_date_rangeのstartとendを単体で取れるようにして、単体の時にはそれ以下、それ以上の判定を行うようにする
