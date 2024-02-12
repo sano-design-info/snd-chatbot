@@ -281,36 +281,35 @@ def str_to_datetime_with_dateutil(date_str):
     return date
 
 
+# TODO:2024-02-12 test_get_billingでテストを書くこと
 def is_range_date(
-    target_date: datetime, before: datetime, after: datetime | None
+    target_date: datetime, start_date: datetime, end_date: datetime | None = None
 ) -> bool:
     """
     指定した日付が、指定した日付の範囲内にあるかどうかを判定する
-    beforeがafterより前になっていたらエラーを出す
+    beforeが一つのみ指定されている場合は、beforeがafterより前になっていたらエラーを出す
     args:
         target_date: 判定する日付
-        before: 範囲の開始日
-        after: 範囲の終了日。Noneの場合は無限大として扱う
+        start_date: 範囲の開始日
+        end_date: 範囲の終了日。オプショナル。指定しない場合はstart_dateのみで判定
 
     return:
         範囲内にあればTrue、範囲外ならFalse
     """
 
-    # beforeがafterより前になっていたらエラーを出す
+    # startのみ指定がある場合、それだけで比較結果を返す
+    if end_date is None:
+        return target_date >= start_date
 
-    if before and after and before > after:
-        raise ValueError("beforeはafterより前にしてください")
+    # startよりendが前の場合はエラーを出す
+    if start_date > end_date:
+        raise ValueError("開始日は終了日より前でなければなりません。")
 
-    # 'after'がNoneの場合、'before'の日付だけで判断
-    if after is None:
-        return target_date <= before
-    else:
-        # 'after'が指定されている場合、範囲内かどうかを判断
-        return before <= target_date <= after
+    # start,endがあり、start,endの範囲が適切な場合、範囲内かどうかを判断
+    return start_date <= target_date <= end_date
 
 
 # 請求書の金額合計のデータを生成する
-# TODO:2023-10-16 count_quoteitemは使わないので、削除する
 def generate_billing_data(
     quote_checked_list: list[QuoteData],
 ) -> BillingInfo:
@@ -380,8 +379,8 @@ def get_values_by_range(
     gsheet_service, spreadsheet_id, name_and_range_dict: dict
 ) -> dict:
     """{"意味名":"セル番号"}の辞書をもとに、Googleスプレッドシートの値を取得する。バッチで複数getする
-
-    戻り値は、{"意味名": [[セルの値]]}の辞書
+    ここでは、シートの値は必ず1行1列の値として取得することを前提としている。
+    戻り値は、{"意味名": "セルの値"}の辞書
     """
     result = (
         gsheet_service.spreadsheets()
@@ -395,7 +394,7 @@ def get_values_by_range(
     )
     # 取得した値を辞書にして返す
     return {
-        key: value.get("values")
+        key: value.get("values")[0][0]
         for key, value in zip(name_and_range_dict, result.get("valueRanges"))
     }
 
@@ -434,39 +433,42 @@ class PrepareTask(BaseTask):
             for i in get_quote_gsheet_by_quote_list_gsheet(gsheet_service, 100)
         ]
         # URLリストからAPIで見積書の情報を取得。GoogleスプレッドシートのIDから情報を取得する。
-        quote_data_by_gsheet = [
+        quota_values_list_extracted_from_gsheet = [
             get_values_by_range(gsheet_service, id, get_hinmoku_celladdrs_by_gsheet())
             for id in quote_gsheet_id_list_under_100
         ]
 
         # 見積一覧から必要情報を収集
-        # 取引先、実行時から40日前まででフィルター
+        # 取引先、見積作成時から40日前まででフィルター
         from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
-        quote_list = [
+        quote_data_list = [
             QuoteData(
-                durarion_src=quote_data["hinmoku_detail"][0][0],
-                price=float(quote_data["hinmoku_price"][0][0]),
-                hinmoku_title=quote_data["hinmoku_name"][0][0],
+                durarion_src=quote_values["hinmoku_detail"],
+                price=float(quote_values["hinmoku_price"]),
+                hinmoku_title=quote_values["hinmoku_name"],
             )
-            for quote_data in quote_data_by_gsheet
+            for quote_values in quota_values_list_extracted_from_gsheet
             if is_range_date(
-                datetime.strptime(quote_data["quote_date"][0][0], "%Y-%m-%d"),
-                from_date,
-                datetime.now(),
+                datetime.strptime(quote_values["quote_date"], "%Y-%m-%d"), from_date
             )
         ]
 
+        # デフォルト表示の選択マーク用のリストを作成
+        # 納期（duration）を使って複数選択のデフォルト選択をマーク
+        # 期日設定の 毎月26日から1か月前の日付をマーク
+        # 例: 9/26締め切りの場合、8/26をマーク
+        # 見積書の一覧を表示して、選択させる
         return [
             (
-                quotedata,
+                quote_data,
                 is_range_date(
-                    str_to_datetime_with_dateutil(quotedata.durarion),
+                    str_to_datetime_with_dateutil(quote_data.durarion),
                     datetime(today_datetime.year, today_datetime.month, 26)
                     - relativedelta(months=1),
                     datetime(today_datetime.year, today_datetime.month, 27),
                 ),
             )
-            for quotedata in quote_list
+            for quote_data in quote_data_list
         ]
 
     def execute_task_by_chat(self):

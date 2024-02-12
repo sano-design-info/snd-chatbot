@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from googleapiclient.discovery import build
 # from googleapiclient.errors import HttpError
 
@@ -27,10 +29,37 @@ if __name__ == "__main__":
     hinmoku_celladdrs = get_billing.get_hinmoku_celladdrs_by_gsheet()
     print(f"hinmoku_celladdrs: {hinmoku_celladdrs.values()}")
 
-    quote_data_by_gsheet = [
+    quota_values_list_extracted_from_gsheet = [
         get_billing.get_values_by_range(
             gsheet_service, id, get_billing.get_hinmoku_celladdrs_by_gsheet()
         )
         for id in quote_gsheet_id_list_under_100
     ]
-    print(quote_data_by_gsheet)
+    print(quota_values_list_extracted_from_gsheet)
+
+    # 40日前の見積書を取得
+    print("40日前の見積書を取得")
+    from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
+    print(
+        [
+            (
+                quote_values,
+                datetime.strptime(quote_values["quote_date"], "%Y/%m/%d").replace(
+                    tzinfo=ZoneInfo("Asia/Tokyo")
+                ),
+                get_billing.is_range_date(
+                    datetime.strptime(quote_values["quote_date"], "%Y/%m/%d").replace(
+                        tzinfo=ZoneInfo("Asia/Tokyo")
+                    ),
+                    from_date,
+                ),
+            )
+            for quote_values in quota_values_list_extracted_from_gsheet
+            if get_billing.is_range_date(
+                datetime.strptime(quote_values["quote_date"], "%Y/%m/%d").replace(
+                    tzinfo=ZoneInfo("Asia/Tokyo")
+                ),
+                from_date,
+            )
+        ]
+    )
