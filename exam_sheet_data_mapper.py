@@ -51,5 +51,9 @@ cell_mapping = {
     },
 }
 
+# テスト用にシートIDから情報収集
+sheet_info = gsheet_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+print(sheet_info)
+
 # データをシートに書き込む
 write_data_to_sheet(gsheet_service, SPREADSHEET_ID, estimate_data, cell_mapping)

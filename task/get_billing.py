@@ -281,21 +281,32 @@ def str_to_datetime_with_dateutil(date_str):
     return date
 
 
-def is_target_date(t_date: datetime, start_date: datetime, end_date: datetime) -> bool:
+def is_range_date(
+    target_date: datetime, before: datetime, after: datetime | None
+) -> bool:
     """
     指定した日付が、指定した日付の範囲内にあるかどうかを判定する
+    beforeがafterより前になっていたらエラーを出す
     args:
-        t_date: 判定したい日付
-        start_date: 範囲の開始日:end_dateより手前の日付を検証する
-        end_date: 範囲の終了日
-    return:
-        t_dateがstart_dateとend_dateの間にあるかどうかの真偽値
-    """
-    # start_dateがend_dateより手前か確認する。違ったらエラー:valueerrorを出す
-    if start_date > end_date:
-        raise ValueError("start_dateはend_dateより前にしてください")
+        target_date: 判定する日付
+        before: 範囲の開始日
+        after: 範囲の終了日。Noneの場合は無限大として扱う
 
-    return start_date.date() <= t_date.date() <= end_date.date()
+    return:
+        範囲内にあればTrue、範囲外ならFalse
+    """
+
+    # beforeがafterより前になっていたらエラーを出す
+
+    if before and after and before > after:
+        raise ValueError("beforeはafterより前にしてください")
+
+    # 'after'がNoneの場合、'before'の日付だけで判断
+    if after is None:
+        return target_date <= before
+    else:
+        # 'after'が指定されている場合、範囲内かどうかを判断
+        return before <= target_date <= after
 
 
 # 請求書の金額合計のデータを生成する
@@ -347,7 +358,7 @@ def get_quote_gsheet_by_quote_list_gsheet(
     # Googleスプレッドシートの見積書一覧をみて、最後尾から必要な件数の見積書スプレッドシートのURLリストを取得する
 
     # 見積計算表の生成元シートの最大行範囲を取得
-    range_name = "見積書管理!D2:D"
+    range_name = "見積書管理!C2:C"
     result = (
         gsheet_service.spreadsheets()
         .values()
@@ -375,13 +386,36 @@ def get_values_by_range(
     result = (
         gsheet_service.spreadsheets()
         .values()
-        .batchGet(spreadsheetId=spreadsheet_id, ranges=name_and_range_dict.values())
+        .batchGet(
+            spreadsheetId=spreadsheet_id,
+            ranges=list(name_and_range_dict.values()),
+            majorDimension="COLUMNS",
+        )
         .execute()
     )
     # 取得した値を辞書にして返す
     return {
         key: value.get("values")
         for key, value in zip(name_and_range_dict, result.get("valueRanges"))
+    }
+
+
+def get_hinmoku_celladdrs_by_gsheet():
+    # 見積スプレッドシートURLから 見積書の品目名と納期と金額を取得。品目は最初の1行のみ取得。
+    # 情報のセルアドレスはテンプレートのセルマッピングに従う。
+    hinmoku_table_celladdr_column = (
+        quote_template_cell_mapping_dict.get("tables").get("item_table").get("columns")
+    )
+    hinmoku_table_startrow = (
+        quote_template_cell_mapping_dict.get("tables").get("item_table").get("startRow")
+    )
+    quote_single_celladdr = quote_template_cell_mapping_dict.get("singlecell")
+    return {
+        "hinmoku_name": f"{hinmoku_table_celladdr_column.get('name')}{hinmoku_table_startrow}",
+        "hinmoku_detail": f"{hinmoku_table_celladdr_column.get('detail')}{hinmoku_table_startrow}",
+        "hinmoku_price": f"{hinmoku_table_celladdr_column.get('price')}{hinmoku_table_startrow}",
+        "quote_date": quote_single_celladdr.get("quote_date"),
+        "quote_id": quote_single_celladdr.get("quote_id"),
     }
 
 
@@ -399,63 +433,33 @@ class PrepareTask(BaseTask):
             i[0].split("/")[-1]
             for i in get_quote_gsheet_by_quote_list_gsheet(gsheet_service, 100)
         ]
-
-        # 見積スプレッドシートURLから 見積書の品目名と納期と金額を取得。品目は最初の1行のみ取得。
-        # 情報のセルアドレスはテンプレートのセルマッピングに従う。
-        hinmoku_table_celladdr_column = quote_template_cell_mapping_dict.get(
-            "tables"
-        ).get("item_table")
-        hinmoku_table_startrow = (
-            quote_template_cell_mapping_dict.get("tables")
-            .get("item_table")
-            .get("startRow")
-        )
-        hinmoku_name_and_range_dict = {
-            "hinmoku_name": f"{hinmoku_table_celladdr_column}{hinmoku_table_startrow}",
-            "hinmoku_duration": f"{hinmoku_table_celladdr_column}{hinmoku_table_startrow}",
-            "hinmoku_price": f"{hinmoku_table_celladdr_column}{hinmoku_table_startrow}",
-        }
         # URLリストからAPIで見積書の情報を取得。GoogleスプレッドシートのIDから情報を取得する。
         quote_data_by_gsheet = [
-            get_values_by_range(gsheet_service, id, hinmoku_name_and_range_dict)
+            get_values_by_range(gsheet_service, id, get_hinmoku_celladdrs_by_gsheet())
             for id in quote_gsheet_id_list_under_100
         ]
 
-        # TODO: 2024-02-10 続きは40日分の取得から。
-        # TODO:2023-10-16 [リファクタリング]日付のフィルターと、デフォルトチェックを同時に行うといいかも。
-        # is_target_dateをis_date_rangeに変更する
-        # is_date_rangeのstartとendを単体で取れるようにして、単体の時にはそれ以下、それ以上の判定を行うようにする
-
+        # 見積一覧から必要情報を収集
         # 取引先、実行時から40日前まででフィルター
         from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
-        filtered_date_by_quote_result = (
-            i
-            for i in quote_result["data"]
-            if i["department_id"] == MISUMI_TORIHIKISAKI_ID
-            and datetime.fromisoformat(i["created_at"]) > from_date
-        )
-
-        # 見積一覧から必要情報を収集
         quote_list = [
-            # 品目の最初の1行を使う
             QuoteData(
-                durarion_src=quote["items"][0]["detail"],
-                price=float(quote["subtotal_price"]),
-                hinmoku_title=quote["items"][0]["name"],
+                durarion_src=quote_data["hinmoku_detail"][0][0],
+                price=float(quote_data["hinmoku_price"][0][0]),
+                hinmoku_title=quote_data["hinmoku_name"][0][0],
             )
-            for quote in filtered_date_by_quote_result
+            for quote_data in quote_data_by_gsheet
+            if is_range_date(
+                datetime.strptime(quote_data["quote_date"][0][0], "%Y-%m-%d"),
+                from_date,
+                datetime.now(),
+            )
         ]
-
-        # questionay.Choiceを使って見積書を選択する。
-        # 納期（duration）を使って複数選択のデフォルト選択をマーク
-        # 期日設定の 毎月26日から1か月前の日付をマーク
-        # 例: 9/26締め切りの場合、8/26をマーク
-        # 見積書の一覧を表示して、選択させる
 
         return [
             (
                 quotedata,
-                is_target_date(
+                is_range_date(
                     str_to_datetime_with_dateutil(quotedata.durarion),
                     datetime(today_datetime.year, today_datetime.month, 26)
                     - relativedelta(months=1),
@@ -505,6 +509,9 @@ class MainTask(BaseTask):
         ask_choiced_quote_list = process_data["task_data"].get("choiced_quote_list")
         billing_data = generate_billing_data(ask_choiced_quote_list)
 
+        # TODO:2024-02-12 ここの変更も必須
+        # * 見積一覧をexcelで記入する -> Googleスプレッドシート化してダウンロードできたら行う
+        # * 請求書の作成
         export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
         billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
         print("一覧と請求書生成しました")
