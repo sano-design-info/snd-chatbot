@@ -210,7 +210,8 @@ def set_border_style(
                 cell.number_format = "[$¥-ja-JP]#,##0;-[$¥-ja-JP]#,##0"
 
 
-def generate_billing_list_excel(
+# TODO:2024-02-12 ここはgoogleスプレッドシートに保存して、excelのファイルとしてダウンロードさせる
+def generate_invoice_list_excel(
     billing_target_quotes: list[QuoteData],
 ) -> Path:
     """
@@ -310,7 +311,7 @@ def is_range_date(
 
 
 # 請求書の金額合計のデータを生成する
-def generate_billing_data(
+def generate_invoice_data(
     quote_checked_list: list[QuoteData],
 ) -> BillingInfo:
     """
@@ -509,13 +510,109 @@ class PrepareTask(BaseTask):
 class MainTask(BaseTask):
     def execute_task(self, process_data: ProcessData | None = None) -> dict:
         ask_choiced_quote_list = process_data["task_data"].get("choiced_quote_list")
-        billing_data = generate_billing_data(ask_choiced_quote_list)
+        invoice_data = generate_invoice_data(ask_choiced_quote_list)
 
         # TODO:2024-02-12 ここの変更も必須
         # * 見積一覧をexcelで記入する -> Googleスプレッドシート化してダウンロードできたら行う
+
+        export_xlsx_path = generate_invoice_list_excel(ask_choiced_quote_list)
+
+        # * 請求書管理表の最後尾の請求書番号を取得
         # * 請求書の作成
-        export_xlsx_path = generate_billing_list_excel(ask_choiced_quote_list)
-        billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
+        # * 請求書管理表の生成したファイルのURLを記録
+
+        # billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
+        # # [見積書作成を行う]
+        # # 見積書管理表から番号を生成
+        # updated_quote_manage_gsheet = googleapi.append_sheet(
+        #     gsheet_service,
+        #     QUOTE_FILE_LIST_GSHEET_ID,
+        #     "見積書管理",
+        #     [["=TEXT(ROW()-1,'0000')", "", "", ""]],
+        #     "USER_ENTERED",
+        #     "INSERT_ROWS",
+        #     True,
+        # )
+        # # 見積書番号を取得
+        # quote_id = get_quote_number_by_quote_manage_gsheet(
+        #     updated_quote_manage_gsheet
+        # )
+        # print(f"見積書の管理表から番号を生成しました。: {quote_id}")
+
+        # # 見積書の情報を生成
+        # anken_quote.convert_dict_to_gsheet_tamplate(quote_id)
+
+        # # googleスプレッドシートの見積書テンプレートを複製する
+        # quote_file_id = googleapi.dupulicate_file(
+        #     gdrive_service,
+        #     QUOTE_TEMPLATE_GSHEET_ID,
+        #     quote_filestem := f"見積書_{anken_quote.anken_number}",
+        # )
+
+        # # 見積書のファイル名と保存先を設定
+        # _ = googleapi.update_file(
+        #     gdrive_service,
+        #     file_id=quote_file_id,
+        #     body=None,
+        #     add_parents=QUOTE_GSHEET_SAVE_DIR_IDS,
+        #     fields="id, parents",
+        # )
+
+        # # 見積書へanken_quoteの内容を記録
+        # sheet_data_mapper.write_data_to_sheet(
+        #     gsheet_service,
+        #     quote_file_id,
+        #     anken_quote.quote_gsheet_data,
+        #     quote_template_cell_mapping_dict,
+        # )
+
+        # # ファイル名:見積書_[納期].pdf
+        # quote_filename = f"{quote_filestem}.pdf"
+
+        # # 見積書のPDFをダウンロード
+        # googleapi.export_pdf_by_driveexporturl(
+        #     google_cred.token,
+        #     quote_file_id,
+        #     export_quote_dirpath / quote_filename,
+        #     {
+        #         "gid": "0",
+        #         "size": "7",
+        #         "portrait": "true",
+        #         "fitw": "true",
+        #         "gridlines": "false",
+        #     },
+        # )
+
+        # # 見積書のPDFをGoogleドライブへ保存
+        # upload_pdf_result = googleapi.upload_file(
+        #     gdrive_service,
+        #     export_quote_dirpath / quote_filename,
+        #     "application/pdf",
+        #     "application/pdf",
+        #     QUOTE_PDF_SAVE_DIR_IDS,
+        # )
+
+        # # 見積書のGoogleスプレッドシートとPDFのURLを見積管理表に記録
+
+        # # 見積管理表を更新する。B列から[ファイル名, 見積書:Gsheet のIDからURL, 見積書:GDrive PDFのIDからURL]
+        # # 見積管理表に番号を追加したupdatedRows（updated_quote_manage_cell_address）を使うがB列以降を使う
+        # # 生成した見積番号のセルアドレスからB列に置き換えて取得。AのみをBにする
+        # # 例: updated_quote_manage_cell_address = "見積書管理!A2:D2" -> "見積書管理!B2:D2"
+        # _ = googleapi.update_sheet(
+        #     gsheet_service,
+        #     QUOTE_FILE_LIST_GSHEET_ID,
+        #     get_updated_cell_address_by_quote_manage_gsheet(
+        #         updated_quote_manage_gsheet
+        #     ).replace("A", "B"),
+        #     [
+        #         [
+        #             quote_filename,
+        #             f"http://docs.google.com/spreadsheets/d/{quote_file_id}",
+        #             f"http://drive.google.com/file/d/{upload_pdf_result.get('id')}",
+        #         ]
+        #     ],
+        # )
+
         print("一覧と請求書生成しました")
         print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
 
