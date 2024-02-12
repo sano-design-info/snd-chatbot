@@ -687,6 +687,7 @@ def dupulicate_file(
     return dupulicated_file_id
 
 
+# TODO:2024-02-12 ここはPDFだけではなくfileタイプを指定できるようにする。変換してDLができない場合は明示的なエラーにすること
 # GoogleドライブのエクスポートURLを元にしたファイルダウンロード
 def export_pdf_by_driveexporturl(
     token: str,
