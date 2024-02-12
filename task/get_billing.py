@@ -54,9 +54,9 @@ INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATH = SCRIPT_CONFIG.get(
 # 請求書ののGoogleスプレッドシート保存先
 # https://drive.google.com/drive/folders/1fM40M8T5Yhj16nfpLQ1i_oPcd0iJqFHt
 INVOICE_GSHEET_SAVE_DIR_IDS = SCRIPT_CONFIG.get("INVOICE_GSHEET_SAVE_DIR_IDS")
-# 請求書のPDF保存先
+# 請求書のPDFと請求一覧のExcel保存先
 # https://drive.google.com/drive/folders/1kYA0eGhNUhYPjkWiGRP018AR6yPs2PGD
-INVOICE_PDF_SAVE_DIR_IDS = SCRIPT_CONFIG.get("INVOICE_PDF_SAVE_DIR_IDS")
+INVOICE_DOC_SAVE_DIR_IDS = SCRIPT_CONFIG.get("INVOICE_DOC_SAVE_DIR_IDS")
 
 # 各定数から全体で使う変数を作成
 export_billing_dirpath = EXPORTDIR_PATH / "billing"
@@ -79,6 +79,7 @@ BILLING_LIST_EXCELPATH = (
 google_cred = googleapi.get_cledential(googleapi.API_SCOPES)
 gsheet_service = build("sheets", "v4", credentials=google_cred)
 gmail_service = build("gmail", "v1", credentials=google_cred)
+gdrive_service = build("drive", "v3", credentials=google_cred)
 
 
 # mfcloudのセッション作成
@@ -419,6 +420,17 @@ def get_hinmoku_celladdrs_by_gsheet():
     }
 
 
+def get_invoice_number_by_invoice_manage_gsheet(
+    updated_result_quote_manage_gsheet
+) -> str:
+    # 追加できた行のA列の値を取得
+    return (
+        updated_result_quote_manage_gsheet.get("updates")
+        .get("updatedData")
+        .get("values")[0][0]
+    )
+
+
 class PrepareTask(BaseTask):
     def execute_task(self) -> list[tuple[QuoteData, bool]]:
         # 見積書一覧を取得
@@ -516,9 +528,34 @@ class MainTask(BaseTask):
         # * 見積一覧をexcelで記入する -> Googleスプレッドシート化してダウンロードできたら行う
 
         export_xlsx_path = generate_invoice_list_excel(ask_choiced_quote_list)
+        # excelファイルをGoogleドライブへ保存
+        upload_xlsx_result = googleapi.upload_file(
+            gdrive_service,
+            export_xlsx_path,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            INVOICE_DOC_SAVE_DIR_IDS,
+        )
 
         # * 請求書管理表の最後尾の請求書番号を取得
+        updated_invoice_manage_gsheet = googleapi.append_sheet(
+            gsheet_service,
+            INVOICE_FILE_LIST_GSHEET_ID,
+            "請求書管理",
+            [["=TEXT(ROW()-1,'0000')", "", "", ""]],
+            "USER_ENTERED",
+            "INSERT_ROWS",
+            True,
+        )
+        # 請求書番号を取得
+        invoice_id = get_invoice_number_by_invoice_manage_gsheet(
+            updated_invoice_manage_gsheet
+        )
+        print(f"請求書の管理表から番号を生成しました。: {invoice_id}")
+
         # * 請求書の作成
+        converted_invoice_dict = convert_dict_to_gsheet_tamplate(invoice_id)
+
         # * 請求書管理表の生成したファイルのURLを記録
 
         # billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
