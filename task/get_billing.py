@@ -9,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 from googleapiclient.discovery import build
 from openpyxl.styles import Border, Side
 from zoneinfo import ZoneInfo
+from api.googleapi import sheet_data_mapper
 
 import chat.card
 from api import googleapi
@@ -151,14 +152,14 @@ class BillingInfo:
 
 
 def convert_dict_to_gsheet_tamplate(
-    invoice_number, hinmoku_name, hinmoku_duration, hinmoku_price
+    invoice_number: str, invoice_title: str, hinmoku_name: str, hinmoku_price: str
 ) -> dict:
     # 請求書へ書き込むデータを作る
     # ここで作成するデータは、INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATHのテンプレートに合わせたデータを作成する
 
     hinmoku = {
         "name": hinmoku_name,
-        "detail": f"納期 {hinmoku_duration:%m/%d}",
+        "detail": "",
         "price": int(hinmoku_price),
         "quantity": 1,
         "zeiritu": "10%",
@@ -167,14 +168,13 @@ def convert_dict_to_gsheet_tamplate(
     # TODO:2024-02-05 これは設定にする
     invoice_id_prefix = "DCCF6E"
     # 請求書番号を生成
-    # TODO: 2024-02-05 ここのget_billing_idはMainTask側で処理して情報をanken_quoteに入れる
     invoice_id = f"{invoice_id_prefix}-I-{invoice_number}"
 
     today_datetime = datetime.now()
     return {
         "customer_name": TORIHIKISAKI_NAME,
-        "billing_id": invoice_id,
-        "title": "ガススプリング配管図作製費",
+        "invoice_id": invoice_id,
+        "title": invoice_title,
         # 日付は実行時の日付を利用
         "billing_date": today_datetime.strftime(START_DATE_FORMAT),
         "due_date": "",
@@ -548,60 +548,70 @@ class MainTask(BaseTask):
             True,
         )
         # 請求書番号を取得
-        invoice_id = get_invoice_number_by_invoice_manage_gsheet(
+        invoice_number = get_invoice_number_by_invoice_manage_gsheet(
             updated_invoice_manage_gsheet
         )
-        print(f"請求書の管理表から番号を生成しました。: {invoice_id}")
+        print(f"請求書の管理表から番号を生成しました。: {invoice_number}")
 
         # * 請求書の作成
-        converted_invoice_dict = convert_dict_to_gsheet_tamplate(invoice_id)
+        converted_invoice_dict = convert_dict_to_gsheet_tamplate(
+            invoice_number,
+            invoice_data.billing_title,
+            invoice_data.hinmoku_title,
+            str(invoice_data.price),
+        )
+
+        # googleスプレッドシートの見積書テンプレートを複製する
+        invoice_file_id = googleapi.dupulicate_file(
+            gdrive_service,
+            INVOICE_TEMPLATE_GSHEET_ID,
+            invoice_filestem := f"請求書_{}",
+        )
+
+        # 請求書スプレッドシートのファイル名と保存先を設定
+        _ = googleapi.update_file(
+            gdrive_service,
+            file_id=invoice_file_id,
+            body=None,
+            add_parents=INVOICE_GSHEET_SAVE_DIR_IDS,
+            fields="id, parents",
+        )
+
+        # 請求書スプレッドシートへ請求情報を記入
+        sheet_data_mapper.write_data_to_sheet(
+            gsheet_service,
+            invoice_file_id,
+            converted_invoice_dict,
+            invoice_template_cell_mapping_dict,
+        )
+
+        # ファイル名:請求書_.pdf
+        quote_filename = f"{invoice_filestem}.pdf"
+
+        # 見積書のPDFをダウンロード
+        googleapi.export_pdf_by_driveexporturl(
+            google_cred.token,
+            quote_file_id,
+            export_quote_dirpath / quote_filename,
+            {
+                "gid": "0",
+                "size": "7",
+                "portrait": "true",
+                "fitw": "true",
+                "gridlines": "false",
+            },
+        )
+
+        # 見積書のPDFをGoogleドライブへ保存
+        upload_pdf_result = googleapi.upload_file(
+            gdrive_service,
+            export_quote_dirpath / quote_filename,
+            "application/pdf",
+            "application/pdf",
+            QUOTE_PDF_SAVE_DIR_IDS,
+        )
 
         # * 請求書管理表の生成したファイルのURLを記録
-
-        # billing_pdf_path = generate_billing_pdf(mfcl_session, billing_data)
-        # # [見積書作成を行う]
-        # # 見積書管理表から番号を生成
-        # updated_quote_manage_gsheet = googleapi.append_sheet(
-        #     gsheet_service,
-        #     QUOTE_FILE_LIST_GSHEET_ID,
-        #     "見積書管理",
-        #     [["=TEXT(ROW()-1,'0000')", "", "", ""]],
-        #     "USER_ENTERED",
-        #     "INSERT_ROWS",
-        #     True,
-        # )
-        # # 見積書番号を取得
-        # quote_id = get_quote_number_by_quote_manage_gsheet(
-        #     updated_quote_manage_gsheet
-        # )
-        # print(f"見積書の管理表から番号を生成しました。: {quote_id}")
-
-        # # 見積書の情報を生成
-        # anken_quote.convert_dict_to_gsheet_tamplate(quote_id)
-
-        # # googleスプレッドシートの見積書テンプレートを複製する
-        # quote_file_id = googleapi.dupulicate_file(
-        #     gdrive_service,
-        #     QUOTE_TEMPLATE_GSHEET_ID,
-        #     quote_filestem := f"見積書_{anken_quote.anken_number}",
-        # )
-
-        # # 見積書のファイル名と保存先を設定
-        # _ = googleapi.update_file(
-        #     gdrive_service,
-        #     file_id=quote_file_id,
-        #     body=None,
-        #     add_parents=QUOTE_GSHEET_SAVE_DIR_IDS,
-        #     fields="id, parents",
-        # )
-
-        # # 見積書へanken_quoteの内容を記録
-        # sheet_data_mapper.write_data_to_sheet(
-        #     gsheet_service,
-        #     quote_file_id,
-        #     anken_quote.quote_gsheet_data,
-        #     quote_template_cell_mapping_dict,
-        # )
 
         # # ファイル名:見積書_[納期].pdf
         # quote_filename = f"{quote_filestem}.pdf"
