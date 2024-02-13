@@ -527,14 +527,17 @@ class MainTask(BaseTask):
         # TODO:2024-02-12 ここの変更も必須
         # * 見積一覧をexcelで記入する -> Googleスプレッドシート化してダウンロードできたら行う
 
-        export_xlsx_path = generate_invoice_list_excel(ask_choiced_quote_list)
+        generate_invoice_list_excel(ask_choiced_quote_list)
         # excelファイルをGoogleドライブへ保存
         upload_xlsx_result = googleapi.upload_file(
             gdrive_service,
-            export_xlsx_path,
+            BILLING_LIST_EXCELPATH,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             INVOICE_DOC_SAVE_DIR_IDS,
+        )
+        print(
+            f"一覧xlsxファイルをGoogleドライブへ保存しました。: {upload_xlsx_result.get('id')}"
         )
 
         # * 請求書管理表の最後尾の請求書番号を取得
@@ -565,7 +568,7 @@ class MainTask(BaseTask):
         invoice_file_id = googleapi.dupulicate_file(
             gdrive_service,
             INVOICE_TEMPLATE_GSHEET_ID,
-            invoice_filestem := f"請求書_{}",
+            BILLING_PDFFILEPATH.stem,
         )
 
         # 請求書スプレッドシートのファイル名と保存先を設定
@@ -585,14 +588,11 @@ class MainTask(BaseTask):
             invoice_template_cell_mapping_dict,
         )
 
-        # ファイル名:請求書_.pdf
-        quote_filename = f"{invoice_filestem}.pdf"
-
         # 見積書のPDFをダウンロード
         googleapi.export_pdf_by_driveexporturl(
             google_cred.token,
-            quote_file_id,
-            export_quote_dirpath / quote_filename,
+            invoice_file_id,
+            BILLING_PDFFILEPATH,
             {
                 "gid": "0",
                 "size": "7",
@@ -602,68 +602,42 @@ class MainTask(BaseTask):
             },
         )
 
-        # 見積書のPDFをGoogleドライブへ保存
+        # 請求書のPDFをGoogleドライブへ保存
         upload_pdf_result = googleapi.upload_file(
             gdrive_service,
-            export_quote_dirpath / quote_filename,
+            BILLING_PDFFILEPATH,
             "application/pdf",
             "application/pdf",
-            QUOTE_PDF_SAVE_DIR_IDS,
+            INVOICE_DOC_SAVE_DIR_IDS,
+        )
+
+        print(
+            f"請求書のPDFをGoogleドライブへ保存しました。: {upload_pdf_result.get('id')}"
         )
 
         # * 請求書管理表の生成したファイルのURLを記録
 
-        # # ファイル名:見積書_[納期].pdf
-        # quote_filename = f"{quote_filestem}.pdf"
-
-        # # 見積書のPDFをダウンロード
-        # googleapi.export_pdf_by_driveexporturl(
-        #     google_cred.token,
-        #     quote_file_id,
-        #     export_quote_dirpath / quote_filename,
-        #     {
-        #         "gid": "0",
-        #         "size": "7",
-        #         "portrait": "true",
-        #         "fitw": "true",
-        #         "gridlines": "false",
-        #     },
-        # )
-
-        # # 見積書のPDFをGoogleドライブへ保存
-        # upload_pdf_result = googleapi.upload_file(
-        #     gdrive_service,
-        #     export_quote_dirpath / quote_filename,
-        #     "application/pdf",
-        #     "application/pdf",
-        #     QUOTE_PDF_SAVE_DIR_IDS,
-        # )
-
-        # # 見積書のGoogleスプレッドシートとPDFのURLを見積管理表に記録
-
-        # # 見積管理表を更新する。B列から[ファイル名, 見積書:Gsheet のIDからURL, 見積書:GDrive PDFのIDからURL]
-        # # 見積管理表に番号を追加したupdatedRows（updated_quote_manage_cell_address）を使うがB列以降を使う
-        # # 生成した見積番号のセルアドレスからB列に置き換えて取得。AのみをBにする
-        # # 例: updated_quote_manage_cell_address = "見積書管理!A2:D2" -> "見積書管理!B2:D2"
-        # _ = googleapi.update_sheet(
-        #     gsheet_service,
-        #     QUOTE_FILE_LIST_GSHEET_ID,
-        #     get_updated_cell_address_by_quote_manage_gsheet(
-        #         updated_quote_manage_gsheet
-        #     ).replace("A", "B"),
-        #     [
-        #         [
-        #             quote_filename,
-        #             f"http://docs.google.com/spreadsheets/d/{quote_file_id}",
-        #             f"http://drive.google.com/file/d/{upload_pdf_result.get('id')}",
-        #         ]
-        #     ],
-        # )
+        # 請求書のGoogleスプレッドシートとPDFのURLを請求書管理表に記録
+        _ = googleapi.update_sheet(
+            gsheet_service,
+            INVOICE_FILE_LIST_GSHEET_ID,
+            # 請求書管理表の番号のセルアドレスを元にB列から追加する
+            updated_invoice_manage_gsheet.replace("A", "B"),
+            [
+                [
+                    BILLING_PDFFILEPATH.stem,
+                    f"http://docs.google.com/spreadsheets/d/{invoice_file_id}",
+                    f"http://drive.google.com/file/d/{upload_pdf_result.get('id')}",
+                ]
+            ],
+        )
 
         print("一覧と請求書生成しました")
-        print(f"一覧xlsxファイルパス:{export_xlsx_path}\n請求書pdf:{billing_pdf_path}")
+        print(
+            f"一覧xlsxファイルパス:{BILLING_LIST_EXCELPATH}\n請求書pdf:{BILLING_PDFFILEPATH}"
+        )
 
-        return set_draft_mail([export_xlsx_path, billing_pdf_path])
+        return set_draft_mail([BILLING_LIST_EXCELPATH, BILLING_PDFFILEPATH])
 
     # チャット用のタスクメソッド
     def execute_task_by_chat(

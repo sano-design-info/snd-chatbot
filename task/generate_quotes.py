@@ -88,7 +88,7 @@ class AnkenQuote(EstimateCalcSheetInfo):
     見積書の各案件事のグループ化を行うためのクラス
     """
 
-    estimate_pdf_path: Path = field(init=False, default=None)
+    quote_pdf_path: Path = field(init=False, default=None)
     quote_gsheet_data = field(init=False, default=None)
     updated_quote_manage_cell_address: str = field(init=False, default=None)
 
@@ -148,22 +148,6 @@ class AnkenQuote(EstimateCalcSheetInfo):
             "note": quote_note,
             "item_table": [hinmoku],
         }
-
-
-def get_quote_number_by_quote_manage_gsheet(updated_result_quote_manage_gsheet) -> str:
-    # 追加できた行のA列の値を取得
-    return (
-        updated_result_quote_manage_gsheet.get("updates")
-        .get("updatedData")
-        .get("values")[0][0]
-    )
-
-
-def get_updated_cell_address_by_quote_manage_gsheet(
-    updated_result_quote_manage_gsheet
-) -> str:
-    # 見積管理シートへ行を入れて見積番号を取得する
-    return updated_result_quote_manage_gsheet.get("updates").get("updatedRange")
 
 
 def generate_anken_quote_list(estimate_calcsheets: list[dict]) -> list[AnkenQuote]:
@@ -317,8 +301,10 @@ class MainTask(BaseTask):
                     True,
                 )
                 # 見積書番号を取得
-                quote_id = get_quote_number_by_quote_manage_gsheet(
-                    updated_quote_manage_gsheet
+                quote_id = (
+                    updated_quote_manage_gsheet.get("updates")
+                    .get("updatedData")
+                    .get("values")[0][0]
                 )
                 print(f"見積書の管理表から番号を生成しました。: {quote_id}")
 
@@ -384,9 +370,9 @@ class MainTask(BaseTask):
                 _ = googleapi.update_sheet(
                     gsheet_service,
                     QUOTE_FILE_LIST_GSHEET_ID,
-                    get_updated_cell_address_by_quote_manage_gsheet(
-                        updated_quote_manage_gsheet
-                    ).replace("A", "B"),
+                    updated_quote_manage_gsheet.get("updates")
+                    .get("updatedRange")
+                    .replace("A", "B"),
                     [
                         [
                             quote_filename,
@@ -397,7 +383,7 @@ class MainTask(BaseTask):
                 )
                 # TODO:2024-02-06 ここのestimate_pdf_pathは変数名が微妙なので、quote_pdf_pathとして変更する。影響範囲を確認すること
                 print(
-                    f"見積書のPDFをダウンロードしました。保存先:{anken_quote.estimate_pdf_path}"
+                    f"見積書のPDFをダウンロードしました。保存先:{anken_quote.quote_pdf_path}"
                 )
                 # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
                 _ = googleapi.update_file(
@@ -409,7 +395,7 @@ class MainTask(BaseTask):
                 )
 
             except HttpError as error:
-                sys.exit(f"スプレッドシート移動時にエラーが発生しました: {error}")
+                sys.exit(f"見積書生成中にエラーが発生しました: {error}")
 
             # スケジュール表の該当行に価格や納期を追加する
             update_msm_anken_schedule_sheet(anken_quote, gsheet_service)
@@ -454,7 +440,7 @@ class MainTask(BaseTask):
             return googleapi.append_draft_in_thread(
                 gmail_service,
                 replybody,
-                (quote_item.estimate_pdf_path for quote_item in anken_quotes),
+                (quote_item.quote_pdf_path for quote_item in anken_quotes),
                 message["id"],
                 threads[0].get("id", ""),
             )
