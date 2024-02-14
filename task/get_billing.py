@@ -152,7 +152,7 @@ class BillingInfo:
 
 
 def convert_dict_to_gsheet_tamplate(
-    invoice_number: str, invoice_title: str, hinmoku_name: str, hinmoku_price: str
+    invoice_number: str, invoice_title: str, hinmoku_name: str, hinmoku_price: float
 ) -> dict:
     # 請求書へ書き込むデータを作る
     # ここで作成するデータは、INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATHのテンプレートに合わせたデータを作成する
@@ -526,7 +526,7 @@ class MainTask(BaseTask):
             INVOICE_DOC_SAVE_DIR_IDS,
         )
         print(
-            f"一覧xlsxファイルをGoogleドライブへ保存しました。: {upload_xlsx_result.get('id')}"
+            f"請求分一覧xlsxファイルをGoogleドライブへ保存しました。: {upload_xlsx_result.get('id')}"
         )
 
         # * 請求書管理表の最後尾の請求書番号を取得
@@ -552,7 +552,7 @@ class MainTask(BaseTask):
             invoice_number,
             invoice_data.billing_title,
             invoice_data.hinmoku_title,
-            str(invoice_data.price),
+            invoice_data.price,
         )
 
         # googleスプレッドシートの見積書テンプレートを複製する
