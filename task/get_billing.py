@@ -420,17 +420,6 @@ def get_hinmoku_celladdrs_by_gsheet():
     }
 
 
-def get_invoice_number_by_invoice_manage_gsheet(
-    updated_result_quote_manage_gsheet
-) -> str:
-    # 追加できた行のA列の値を取得
-    return (
-        updated_result_quote_manage_gsheet.get("updates")
-        .get("updatedData")
-        .get("values")[0][0]
-    )
-
-
 class PrepareTask(BaseTask):
     def execute_task(self) -> list[tuple[QuoteData, bool]]:
         # 見積書一覧を取得
@@ -551,8 +540,10 @@ class MainTask(BaseTask):
             True,
         )
         # 請求書番号を取得
-        invoice_number = get_invoice_number_by_invoice_manage_gsheet(
-            updated_invoice_manage_gsheet
+        invoice_number = (
+            updated_invoice_manage_gsheet.get("updates")
+            .get("updatedData")
+            .get("values")[0][0]
         )
         print(f"請求書の管理表から番号を生成しました。: {invoice_number}")
 
@@ -588,7 +579,7 @@ class MainTask(BaseTask):
             invoice_template_cell_mapping_dict,
         )
 
-        # 見積書のPDFをダウンロード
+        # 請求書のPDFをダウンロード
         googleapi.export_pdf_by_driveexporturl(
             google_cred.token,
             invoice_file_id,
@@ -615,14 +606,14 @@ class MainTask(BaseTask):
             f"請求書のPDFをGoogleドライブへ保存しました。: {upload_pdf_result.get('id')}"
         )
 
-        # * 請求書管理表の生成したファイルのURLを記録
-
         # 請求書のGoogleスプレッドシートとPDFのURLを請求書管理表に記録
         _ = googleapi.update_sheet(
             gsheet_service,
             INVOICE_FILE_LIST_GSHEET_ID,
             # 請求書管理表の番号のセルアドレスを元にB列から追加する
-            updated_invoice_manage_gsheet.replace("A", "B"),
+            updated_invoice_manage_gsheet.get("updates")
+            .get("updatedRange")
+            .replace("A", "B"),
             [
                 [
                     BILLING_PDFFILEPATH.stem,
