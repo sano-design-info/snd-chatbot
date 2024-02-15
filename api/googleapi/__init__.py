@@ -540,7 +540,8 @@ def upload_file(
     file_metadata = {
         "name": src_file_path.name,
         "mimeType": dst_file_mimetype,
-        "parents": dst_file_parents,
+        # TODO:2024-02-15 この部分、文字列がまとまったリストを受け取るが、文字列として渡さなければいけないはずなのにそうなってない理由が不明
+        "parents": dst_file_parents if dst_file_parents else None,
     }
 
     return drive_service.files().create(body=file_metadata, media_body=media).execute()
