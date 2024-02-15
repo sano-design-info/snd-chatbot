@@ -280,6 +280,7 @@ def str_to_datetime_with_dateutil(date_str):
     if current_month == 12 and (date.month == 1 or date.month == 2):
         date = date.replace(year=current_year + 1)
 
+    # タイムゾーンを入れて返す
     return date
 
 
@@ -430,15 +431,23 @@ class PrepareTask(BaseTask):
 
         # 見積管理表の最後尾100件の見積書スプレッドシートのURLリストを取得する
         # URL（https://docs.google.com/spreadsheets/d/fasfdasfa_IDS_fsdfadsfa）からID(fasfdasfa_IDS_fsdfadsfa)を取得する
+        quote_gsheet_url_list_under_100 = get_quote_gsheet_by_quote_list_gsheet(
+            gsheet_service, 100
+        )
+        print(f"見積書のURLリスト: {quote_gsheet_url_list_under_100}")
+
         quote_gsheet_id_list_under_100 = [
-            i[0].split("/")[-1]
-            for i in get_quote_gsheet_by_quote_list_gsheet(gsheet_service, 100)
+            i[0].split("/")[-1] for i in quote_gsheet_url_list_under_100
         ]
+        print(f"見積書のIDリスト: {quote_gsheet_id_list_under_100}")
+
         # URLリストからAPIで見積書の情報を取得。GoogleスプレッドシートのIDから情報を取得する。
         quota_values_list_extracted_from_gsheet = [
             get_values_by_range(gsheet_service, id, get_hinmoku_celladdrs_by_gsheet())
             for id in quote_gsheet_id_list_under_100
         ]
+
+        print(f"見積書の情報: {quota_values_list_extracted_from_gsheet}")
 
         # 見積一覧から必要情報を収集
         # 取引先、見積作成時から40日前まででフィルター
@@ -451,7 +460,10 @@ class PrepareTask(BaseTask):
             )
             for quote_values in quota_values_list_extracted_from_gsheet
             if is_range_date(
-                datetime.strptime(quote_values["quote_date"], "%Y-%m-%d"), from_date
+                datetime.strptime(quote_values["quote_date"], "%Y/%m/%d").replace(
+                    tzinfo=ZoneInfo("Asia/Tokyo")
+                ),
+                from_date,
             )
         ]
 
@@ -464,10 +476,22 @@ class PrepareTask(BaseTask):
             (
                 quote_data,
                 is_range_date(
-                    str_to_datetime_with_dateutil(quote_data.durarion),
-                    datetime(today_datetime.year, today_datetime.month, 26)
+                    str_to_datetime_with_dateutil(quote_data.durarion).replace(
+                        tzinfo=ZoneInfo("Asia/Tokyo")
+                    ),
+                    datetime(
+                        today_datetime.year,
+                        today_datetime.month,
+                        26,
+                        tzinfo=ZoneInfo("Asia/Tokyo"),
+                    )
                     - relativedelta(months=1),
-                    datetime(today_datetime.year, today_datetime.month, 27),
+                    datetime(
+                        today_datetime.year,
+                        today_datetime.month,
+                        27,
+                        tzinfo=ZoneInfo("Asia/Tokyo"),
+                    ),
                 ),
             )
             for quote_data in quote_data_list
@@ -534,7 +558,7 @@ class MainTask(BaseTask):
             gsheet_service,
             INVOICE_FILE_LIST_GSHEET_ID,
             "請求書管理",
-            [["=TEXT(ROW()-1,'0000')", "", "", ""]],
+            [['=TEXT(ROW()-1,"0000")', "", "", ""]],
             "USER_ENTERED",
             "INSERT_ROWS",
             True,
