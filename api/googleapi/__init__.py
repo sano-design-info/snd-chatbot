@@ -551,7 +551,7 @@ def update_file(
     file_id: str,
     body: dict | None = None,
     fields: str = None,
-    add_parents: str | None = None,
+    add_parents: list[str] | None = None,
     remove_parents: list[str] | None = None,
 ) -> dict:
     """
@@ -561,8 +561,8 @@ def update_file(
         file_id: ファイルID
         body: 更新するファイルのメタデータ
         fields: 取得するフィールド
-        add_parents: 追加する親フォルダID
-        remove_parents: 削除する親フォルダID
+        add_parents: 追加する親フォルダID。文字列が入ったリストで受け取り文字列に変換して渡す
+        remove_parents: 削除する親フォルダID。文字列が入ったリストで受け取り文字列に変換して渡す
     return:
         更新したファイルの情報
     """
@@ -571,8 +571,8 @@ def update_file(
         .update(
             fileId=file_id,
             body=body,
-            addParents=add_parents,
-            removeParents=remove_parents,
+            addParents=",".join(add_parents) if add_parents else None,
+            removeParents=",".join(remove_parents) if remove_parents else None,
             fields=fields,
         )
         .execute()

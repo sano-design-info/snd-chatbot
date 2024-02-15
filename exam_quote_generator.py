@@ -151,7 +151,7 @@ def generate_and_manage_quote() -> str:
             gdrive_service,
             file_id=quote_file_id,
             body=None,
-            add_parents=",".join(QUOTE_GSHEET_SAVE_DIR_IDS),
+            add_parents=QUOTE_GSHEET_SAVE_DIR_IDS,
             fields="id, parents",
         )
 
@@ -219,7 +219,7 @@ def generate_and_manage_quote() -> str:
         #     gdrive_service,
         #     file_id=anken_quote.calcsheet_source,
         #     add_parents=ARCHIVED_ESTIMATECALCSHEET_DIR_ID,
-        #     remove_parents=",".join(anken_quote.calcsheet_parents),
+        #     remove_parents=anken_quote.calcsheet_parents,
         #     fields="id",
         # )
 

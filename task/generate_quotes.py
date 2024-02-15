@@ -35,8 +35,8 @@ TORIHIKISAKI_NAME = config.get("general").get("TORIHIKISAKI_NAME")
 
 SCRIPT_CONFIG = config.get("generate_quotes")
 ESTIMATE_CALCSHEET_DIR_IDS = SCRIPT_CONFIG.get("ESTIMATE_CALCSHEET_DIR_IDS")
-ARCHIVED_ESTIMATECALCSHEET_DIR_ID = SCRIPT_CONFIG.get(
-    "ARCHIVED_ESTIMATECALCSHEET_DIR_ID"
+ARCHIVED_ESTIMATECALCSHEET_DIR_IDS = SCRIPT_CONFIG.get(
+    "ARCHIVED_ESTIMATECALCSHEET_DIR_IDS"
 )
 MAIL_TEMPLATE_BODY_STR = SCRIPT_CONFIG.get("mail_template_body")
 
@@ -89,7 +89,7 @@ class AnkenQuote(EstimateCalcSheetInfo):
     """
 
     quote_pdf_path: Path = field(init=False, default=None)
-    quote_gsheet_data = field(init=False, default=None)
+    quote_gsheet_data: dict = field(init=False, default=None)
     updated_quote_manage_cell_address: str = field(init=False, default=None)
 
     def __post_init__(self):
@@ -295,10 +295,13 @@ class MainTask(BaseTask):
                     gsheet_service,
                     QUOTE_FILE_LIST_GSHEET_ID,
                     "見積書管理",
-                    [["=TEXT(ROW()-1,'0000')", "", "", ""]],
+                    [['=TEXT(ROW()-1,"0000")', "", "", ""]],
                     "USER_ENTERED",
                     "INSERT_ROWS",
                     True,
+                )
+                print(
+                    f"見積書の管理表に番号を生成しました。: {updated_quote_manage_gsheet}"
                 )
                 # 見積書番号を取得
                 quote_id = (
@@ -337,12 +340,13 @@ class MainTask(BaseTask):
 
                 # ファイル名:見積書_[納期].pdf
                 quote_filename = f"{quote_filestem}.pdf"
+                anken_quote.quote_pdf_path = export_quote_dirpath / quote_filename
 
                 # 見積書のPDFをダウンロード
                 googleapi.export_pdf_by_driveexporturl(
                     google_cred.token,
                     quote_file_id,
-                    export_quote_dirpath / quote_filename,
+                    anken_quote.quote_pdf_path,
                     {
                         "gid": "0",
                         "size": "7",
@@ -355,7 +359,7 @@ class MainTask(BaseTask):
                 # 見積書のPDFをGoogleドライブへ保存
                 upload_pdf_result = googleapi.upload_file(
                     gdrive_service,
-                    export_quote_dirpath / quote_filename,
+                    anken_quote.quote_pdf_path,
                     "application/pdf",
                     "application/pdf",
                     QUOTE_PDF_SAVE_DIR_IDS,
@@ -385,12 +389,12 @@ class MainTask(BaseTask):
                 print(
                     f"見積書のPDFをダウンロードしました。保存先:{anken_quote.quote_pdf_path}"
                 )
-                # - 生成後、今回選択したスプレッドシートは生成済みフォルダへ移動する
+                # 見積書生成後、今回選択した見積計算書スプレッドシートは生成済みフォルダへ移動する
                 _ = googleapi.update_file(
                     gdrive_service,
                     file_id=anken_quote.calcsheet_source,
-                    add_parents=ARCHIVED_ESTIMATECALCSHEET_DIR_ID,
-                    remove_parents=",".join(anken_quote.calcsheet_parents),
+                    add_parents=ARCHIVED_ESTIMATECALCSHEET_DIR_IDS,
+                    remove_parents=anken_quote.calcsheet_parents,
                     fields="id",
                 )
 
