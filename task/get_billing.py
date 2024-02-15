@@ -176,7 +176,7 @@ def convert_dict_to_gsheet_tamplate(
         "invoice_id": invoice_id,
         "title": invoice_title,
         # 日付は実行時の日付を利用
-        "billing_date": today_datetime.strftime(START_DATE_FORMAT),
+        "invoice_date": today_datetime.strftime(START_DATE_FORMAT),
         "due_date": "",
         "note": "詳細は別添付の明細をご確認ください",
         "item_table": [hinmoku],
