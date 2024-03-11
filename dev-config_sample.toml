@@ -52,7 +52,7 @@ ESTIMATE_CALCSHEET_DIR_IDS = ["[フォルダID]"]
 
 # 見積計算表のPDF生成をした後の生成前シート保存先
 # https://drive.google.com/drive/folders/[フォルダID]
-ARCHIVED_ESTIMATECALCSHEET_DIR_ID = "[フォルダID]"
+ARCHIVED_ESTIMATECALCSHEET_DIR_IDS = "[フォルダID]"
 
 # 見積書生成:
 # 見積書のファイル一覧を記録するGoogleスプレッドシートのID
