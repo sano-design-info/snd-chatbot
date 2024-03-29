@@ -99,7 +99,7 @@ def confirm_get_billing(session_data: dict) -> dict:
     ]
 
     # 見積書の情報を元に、金額の合計を出す
-    billing_data = get_billing.generate_billing_data(ask_choiced_quote_list)
+    billing_data = get_billing.generate_invoice_data(ask_choiced_quote_list)
 
     # ここで請求書情報を出して、こちらの検証と正しいか確認
     calc_result = f"""

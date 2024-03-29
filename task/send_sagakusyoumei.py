@@ -47,9 +47,7 @@ DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 # 差額証明のファイル名を定義
-sagakusyoumei_new_name = (
-    f"ミスミ売掛金勘定差額明細書_{today_dt_minus_one_month__year}{today_dt_minus_one_month__month}"
-)
+sagakusyoumei_new_name = f"ミスミ売掛金勘定差額明細書_{today_dt_minus_one_month__year}{today_dt_minus_one_month__month}"
 
 # 各APIの認証
 mfci_session = mfcloud_api.MFCIClient().get_session()
@@ -258,8 +256,12 @@ class ScriptTask(BaseTask):
             sys.exit(1)
 
         # シートをPDFとしてエクスポートします
+        # TODO:2024-02-05 クエリパラメーターの記載が必要。portrait: trueにする必要があるか検証すること
         googleapi.export_pdf_by_driveexporturl(
-            google_cred.token, sheet_id, EXPORT_DIR / f"{sagakusyoumei_new_name}.pdf"
+            google_cred.token,
+            sheet_id,
+            EXPORT_DIR / f"{sagakusyoumei_new_name}.pdf",
+            {"portrait": "false"},
         )
 
         # 4.メールの下書きを作成

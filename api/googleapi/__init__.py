@@ -514,17 +514,17 @@ def get_file_list(
 def upload_file(
     drive_service: Resource,
     src_file_path: Path,
-    src_file_mime_type: str,
-    dst_file_meta_type: str,
+    src_file_mimetype: str,
+    dst_file_mimetype: str,
     dst_file_parents: list[str] | None = None,
 ) -> dict:
     """
     Google Drive APIを使用して、ファイルを作成します。
     args:
         drive_service: Drive APIのサービス
-        src_file_path: 作成する元のファイルのパス
-        src_file_mime_type: 作成する元のファイルのMIMEタイプ
-        dst_file_meta_type: Google Driveへアップロードする際に変換するファイルのMIMEタイプ
+        src_file_path: 元のファイルのパス
+        src_file_mimetype: 元のファイルのMIMEタイプ
+        dst_file_mimetype: Google Driveへアップロードする際に変換するファイルのMIMEタイプ
         dst_file_parents: Google Driveへアップロードする際のファイルの親フォルダID
     return:
         作成したファイルの情報
@@ -533,14 +533,15 @@ def upload_file(
     # ExcelファイルをPDFに変換する
     media = MediaFileUpload(
         src_file_path,
-        mimetype=src_file_mime_type,
+        mimetype=src_file_mimetype,
         resumable=True,
     )
 
     file_metadata = {
         "name": src_file_path.name,
-        "mimeType": dst_file_meta_type,
-        "parents": dst_file_parents,
+        "mimeType": dst_file_mimetype,
+        # TODO:2024-02-15 この部分、文字列がまとまったリストを受け取るが、文字列として渡さなければいけないはずなのにそうなってない理由が不明
+        "parents": dst_file_parents if dst_file_parents else None,
     }
 
     return drive_service.files().create(body=file_metadata, media_body=media).execute()
@@ -551,7 +552,7 @@ def update_file(
     file_id: str,
     body: dict | None = None,
     fields: str = None,
-    add_parents: str | None = None,
+    add_parents: list[str] | None = None,
     remove_parents: list[str] | None = None,
 ) -> dict:
     """
@@ -561,8 +562,8 @@ def update_file(
         file_id: ファイルID
         body: 更新するファイルのメタデータ
         fields: 取得するフィールド
-        add_parents: 追加する親フォルダID
-        remove_parents: 削除する親フォルダID
+        add_parents: 追加する親フォルダID。文字列が入ったリストで受け取り文字列に変換して渡す
+        remove_parents: 削除する親フォルダID。文字列が入ったリストで受け取り文字列に変換して渡す
     return:
         更新したファイルの情報
     """
@@ -571,8 +572,8 @@ def update_file(
         .update(
             fileId=file_id,
             body=body,
-            addParents=add_parents,
-            removeParents=remove_parents,
+            addParents=",".join(add_parents) if add_parents else None,
+            removeParents=",".join(remove_parents) if remove_parents else None,
             fields=fields,
         )
         .execute()
@@ -687,9 +688,13 @@ def dupulicate_file(
     return dupulicated_file_id
 
 
+# TODO:2024-02-12 ここはPDFだけではなくfileタイプを指定できるようにする。変換してDLができない場合は明示的なエラーにすること
 # GoogleドライブのエクスポートURLを元にしたファイルダウンロード
 def export_pdf_by_driveexporturl(
-    token: str, file_id: str, save_path: Path, query: dict = None
+    token: str,
+    file_id: str,
+    save_path: Path,
+    query_param: dict | None = None,
 ) -> None:
     """
     GoogleドライブのエクスポートURLを元に、PDFファイルをダウンロードします。
@@ -699,23 +704,41 @@ def export_pdf_by_driveexporturl(
     通常はAPI経由でダウンロードしますが、pdfの場合はエクスポートのパラメーター指定をして
     のダウンロードは対応していません。（例えば、pdf, 横向きでエクスポートはできない）
 
-    現時点で、特定のワークロードでのみ動作確認しています。エクスポートURLのクエリパラメータは以下の通りです。
+    クエリパラメーターを入れることで、エクスポートパラメータを指定できます。PDFはデフォルトなので指定なしでOKです。
 
-    * format=pdf
-    * portrait=false : 横向きにする
+    その他パラメーター例:
 
-    TODO:2023-06-05 クエリパラメータの指定を引数で行えるようにする
+    'gid' - これを省略すると、すべての表示中のシートがエクスポートされます。単一のシートをエクスポートするには、シートIDを追加してください。
+    'format' - ファイルタイプ。この場合はPDFです。
+    'size' - 用紙サイズ：, 0 (レター), 1 (タブロイド), 2 (リーガル), 3 (ステートメント), 4 (エグゼクティブ), 5 (フォリオ), 6 (A3), 7 (A4), 8 (A5), 9 (B4), 10 (B5)
+    'portrait' - ページの向き（ポートレート true/false、landscapeは使用しない）
+    'fitw' - 幅に合わせる、GUIでのように。高さに合わせるやページに合わせるのパラメーターはまだ見つかっていませんが、「fith」かもしれません？
+    'top_margin' - インチ単位でマージンを設定します。bottom_、left_、right_も同様です。4つのマージンが全て存在する場合にのみ機能するようです。
+    'gridlines' - フォーマット > グリッド線を表示する。 (true/false)
+    'printnotes' - フォーマット > ノートを表示する。 (true/false)
+    ページ順序に関するパラメーターを追加できる方がいれば、とても役立ちます。
+    'horizontal_alignment' - フォーマット > 配置 > 水平。 (LEFT/CENTER/RIGHT)
+    'vertical_alignment' - フォーマット > 配置 > 垂直。 (TOP/MIDDLE/BOTTOM)
+    'pagenum' - ヘッダー＆フッター > ページ番号。ページ番号を非表示にするにはUNDEFINEDを使用します。 (LEFT/CENTER/RIGHT/UNDEFINED)
+    'printtitle' - ヘッダー＆フッター > ワークブックのタイトル。 (true/false)
+    'sheetnames' - ヘッダー＆フッター > シート名。 (true/false)
+    現在の日付、現在の時刻、あるいはカスタムフィールドに関するパラメーターを追加できる方がいれば、とても役立ちます。
 
     args:
         token: Google APIのトークン
         file_id: ファイルID
         save_path: PDFファイルの保存先
+        query: クエリパラメータ 辞書が入る。:デフォルトはNone。
     return:
         なし
     """
+    # クエリパラメーターを元にURLパラメーターを作成
+    export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=pdf"
+    if query_param:
+        query_str = "&".join([f"{k}={v}" for k, v in query_param.items()])
 
-    # エクスポートするURLを生成
-    export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=pdf&portrait=false"
+        # クエリからエクスポートするURLを生成
+        export_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=pdf&{query_str}"
 
     # requestsでダウンロードする。stream指定でチャンクサイズは1MBでダウンロードする
     params = {"access_token": token}
@@ -738,6 +761,7 @@ def append_sheet(
     append_values: list[list],
     value_input_option="RAW",
     insert_data_option="INSERT_ROWS",
+    include_values_in_response=False,
 ) -> list[dict]:
     """
     Gooogle Spreadsheet APIを使用して、スプレッドシートに値を追加します。
@@ -748,6 +772,7 @@ def append_sheet(
         append_values: 追加する値のリスト
         value_input_option: 値の入力方法
         insert_data_option: データの挿入方法
+        include_values_in_response: レスポンスに値を含めるかどうか。デフォルトは無効（False）
     return:
         APIからのレスポンス
     """
@@ -760,8 +785,40 @@ def append_sheet(
             body={"values": append_values},
             valueInputOption=value_input_option,
             insertDataOption=insert_data_option,
+            includeValuesInResponse=include_values_in_response,
         )
     ).execute()
+
+
+def update_sheet(
+    service: Resource,
+    spreadsheet_id: str,
+    range_name: str,
+    values: list[list],
+    value_input_option: str = "RAW",
+) -> dict:
+    """
+    Google Spreadsheet APIを使用して、スプレッドシートのセル範囲に値を記入します。
+    args:
+        service: Spreadsheet APIのサービス
+        spreadsheet_id: スプレッドシートID
+        range_name: セル範囲
+        values: 記入する値のリスト
+        value_input_option: 値の入力方法
+    return:
+        APIからのレスポンス
+    """
+    return (
+        service.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueInputOption=value_input_option,
+            body={"values": values},
+        )
+        .execute()
+    )
 
 
 # [Google Chat API]
