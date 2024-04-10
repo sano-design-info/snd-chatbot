@@ -42,12 +42,21 @@ GOOGLE_API_SCOPES = googleapi.API_SCOPES
 config = load_config.CONFIG
 
 schedule_spreadsheet_id = config.get("general").get("SCHEDULE_SPREADSHEET_ID")
-schedule_spreadsheet_table_range = config.get("general").get("SCHEDULE_SPREADSHEET_TABLE_RANGE")
+schedule_spreadsheet_table_range = config.get("general").get(
+    "SCHEDULE_SPREADSHEET_TABLE_RANGE"
+)
 
 msm_gas_boilerplate_path = config.get("run_mail_action").get("MSM_GAS_BOILERPLATE_PATH")
-estimatecalc_template_gsheet_id = config.get("run_mail_action").get("ESTIMATECALC_TEMPLATE_GSHEET_ID")
-renrakukoumoku_save_dir_ids = config.get("run_mail_action").get("RENRAKUKOUMOKU_SAVE_DIR_IDS")
-copy_project_dir_dest_path = Path(config.get("run_mail_action").get("COPY_PROJECT_DIR_DEST_PATH"))
+estimatecalc_template_gsheet_id = config.get("run_mail_action").get(
+    "ESTIMATECALC_TEMPLATE_GSHEET_ID"
+)
+renrakukoumoku_save_dir_ids = config.get("run_mail_action").get(
+    "RENRAKUKOUMOKU_SAVE_DIR_IDS"
+)
+copy_project_dir_dest_path = Path(
+    config.get("run_mail_action").get("COPY_PROJECT_DIR_DEST_PATH")
+)
+nyukin_standard_day = config.get("run_mail_action").get("NYUKIN_STANDARD_DAY")
 
 # google api service
 target_userid = config.get("google").get("GMAIL_USER_ID")
@@ -234,7 +243,9 @@ def generate_projectdir(attachment_dirpath: Path, export_dirpath: Path) -> None:
 
     # 添付ファイルをコピーする
     # TODO:2022-12-16 プロジェクトフォルダの名称は環境変数化したほうがいいかも？
-    project_dir = generated_copier_worker.dst_path / f"ミスミ配管図MA-{msm_katasiki_num}納期 -"
+    project_dir = (
+        generated_copier_worker.dst_path / f"ミスミ配管図MA-{msm_katasiki_num}納期 -"
+    )
     shutil.copytree(attachment_dirpath, (project_dir / "資料"), dirs_exist_ok=True)
 
 
@@ -280,7 +291,7 @@ def add_schedule_spreadsheet(
     if nyukin_nextmonth:
         nyukin_month = 2
     add_schedule_hurikomiduki = now_datetime.replace(day=1) + relativedelta(
-        months=nyukin_month
+        months=nyukin_month, day=nyukin_standard_day
     )
 
     append_values = [
@@ -294,7 +305,7 @@ def add_schedule_spreadsheet(
             "",
             "",
             "",
-            f"{add_schedule_hurikomiduki.month}月末",
+            f"{add_schedule_hurikomiduki:%Y/%m/%d}",
             "",
             "",
             add_schedule_kokyaku,
@@ -396,7 +407,9 @@ class PrepareTask(BaseTask):
             # Call the Gmail API
 
             # 該当メールのスレッド検索
-            threads = googleapi.search_threads(gmail_service, "label:snd-ミスミ (*MA-*)")
+            threads = googleapi.search_threads(
+                gmail_service, "label:snd-ミスミ (*MA-*)"
+            )
 
             # 上位10件のスレッド -> メッセージを取得。
             # スレッドに紐づきが2件ぐらいのメッセージの部分でのもので十分かな
@@ -585,7 +598,9 @@ class MainTask(BaseTask):
             "result_card__run_mail_action",
             header=bot_header,
             widgets=[
-                chat.card.genwidget_textparagraph(f"メールタスクが完了しました。{result.get('id')}"),
+                chat.card.genwidget_textparagraph(
+                    f"メールタスクが完了しました。{result.get('id')}"
+                ),
             ],
         )
         # send_message_body.update({"actionResponse": {"type": "NEW_MESSAGE"}})

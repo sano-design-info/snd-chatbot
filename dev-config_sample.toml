@@ -45,6 +45,9 @@ ESTIMATECALC_TEMPLATE_GSHEET_ID = "[シートID]"
 # https://drive.google.com/drive/folders/[フォルダID]
 RENRAKUKOUMOKU_SAVE_DIR_IDS = ["[フォルダID]"]
 
+# 入金日の日の基準日: 数字
+NYUKIN_STANDARD_DAY = 20
+
 [generate_quotes]
 # 見積計算の保存先
 # https://drive.google.com/drive/folders/[フォルダID]
