@@ -482,7 +482,7 @@ class PrepareTask(BaseTask):
                     # 実行日の月初め
                     today_datetime.replace(day=1),
                     # ここは今月末を取得する処理に変更する
-                    today_datetime.replace(day=1, month=today_datetime.month+1) - timedelta(days=1)
+                    today_datetime.replace(day=1) + relativedelta(months=1) - timedelta(days=1)
 
                 ),
             )
