@@ -397,7 +397,7 @@ def get_values_by_range(
     )
     # 取得した値を辞書にして返す
     return {
-        key: value.get("values")[0][0]
+        key: value.get("values",[[""]])[0][0]
         for key, value in zip(name_and_range_dict, result.get("valueRanges"))
     }
 
@@ -450,7 +450,7 @@ class PrepareTask(BaseTask):
         print(f"見積書の情報: {quota_values_list_extracted_from_gsheet}")
 
         # 見積一覧から必要情報を収集
-        # 取引先、見積作成時から40日前まででフィルター
+        # 見積作成時から40日前まで and 品目のフォーマットがミスミの案件番号（正規表現で判断）かでフィルター
         from_date = datetime.now(ZoneInfo("Asia/Tokyo")) + timedelta(days=-40)
         quote_data_list = [
             QuoteData(
@@ -464,7 +464,7 @@ class PrepareTask(BaseTask):
                     tzinfo=ZoneInfo("Asia/Tokyo")
                 ),
                 from_date,
-            )
+            ) and MSM_ANKEN_NUMBER.match(quote_values["hinmoku_name"])
         ]
 
         # デフォルト表示の選択マーク用のリストを作成
