@@ -67,7 +67,7 @@ with open(INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATH, "r", encoding="utf-8") as f:
     invoice_template_cell_mapping_dict = json.load(f)
 
 # 本日の日付を全体で使うためにここで宣言
-today_datetime = datetime.now()
+today_datetime = datetime.now(ZoneInfo("Asia/Tokyo"))
 BILLING_PDFFILEPATH = (
     export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
 )
@@ -469,8 +469,8 @@ class PrepareTask(BaseTask):
 
         # デフォルト表示の選択マーク用のリストを作成
         # 納期（duration）を使って複数選択のデフォルト選択をマーク
-        # 期日設定の 毎月26日から1か月前の日付をマーク
-        # 例: 9/26締め切りの場合、8/26をマーク
+        # 期限設定: 実行日（今日）から1か月前の日付をマーク。実行日は月末想定なので、今月末を計算する
+        
         # 見積書の一覧を表示して、選択させる
         return [
             (
@@ -478,20 +478,12 @@ class PrepareTask(BaseTask):
                 is_range_date(
                     str_to_datetime_with_dateutil(quote_data.durarion).replace(
                         tzinfo=ZoneInfo("Asia/Tokyo")
-                    ),
-                    datetime(
-                        today_datetime.year,
-                        today_datetime.month,
-                        26,
-                        tzinfo=ZoneInfo("Asia/Tokyo"),
-                    )
-                    - relativedelta(months=1),
-                    datetime(
-                        today_datetime.year,
-                        today_datetime.month,
-                        27,
-                        tzinfo=ZoneInfo("Asia/Tokyo"),
-                    ),
+                    ), 
+                    # 実行日の月初め
+                    today_datetime.replace(day=1),
+                    # ここは今月末を取得する処理に変更する
+                    today_datetime.replace(day=1, month=today_datetime.month+1) - timedelta(days=1)
+
                 ),
             )
             for quote_data in quote_data_list
