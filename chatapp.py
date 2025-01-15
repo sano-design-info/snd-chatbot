@@ -17,7 +17,7 @@ from task import (
     generate_quotes,
     get_billing,
     run_mail_action,
-    send_sagakusyoumei,
+    # send_sagakusyoumei,
 )
 
 # Flaskアプリケーションの初期化
@@ -178,18 +178,18 @@ def runtask_run_mail_action(session_data: dict) -> dict:
     return ACTION_RESPONSE_OK_JSON
 
 
-# [send_sagakusyoumei]: タスク実行のみ
-def runtask_send_sagakusyoumei() -> dict:
-    script_task = send_sagakusyoumei.ScriptTask()
-    job = queue.enqueue(script_task.execute_task_by_chat)
+# # [send_sagakusyoumei]: タスク実行のみ
+# def runtask_send_sagakusyoumei() -> dict:
+#     script_task = send_sagakusyoumei.ScriptTask()
+#     job = queue.enqueue(script_task.execute_task_by_chat)
 
-    print(f"job.id:{job.id}")
-    # タスク実行がされたことを示すカードメッセージを送付する
-    return chat.card.create_card_text(
-        "nortify_task_card__send_sagakusyoumei",
-        bot_header,
-        "send_sagakusyoumei のタスクを実行します...",
-    )
+#     print(f"job.id:{job.id}")
+#     # タスク実行がされたことを示すカードメッセージを送付する
+#     return chat.card.create_card_text(
+#         "nortify_task_card__send_sagakusyoumei",
+#         bot_header,
+#         "send_sagakusyoumei のタスクを実行します...",
+#     )
 
 
 # [calc_add]: 設定カード→内容確認カード→メインタスク実行
@@ -412,10 +412,10 @@ def response_generator(event):
                 )
                 return open_cofig_card_calc_add()
 
-            case "101":
-                print("slash command 101: send_sagakusyoumei")
-                print("run_task__send_sagakusyoumei")
-                return runtask_send_sagakusyoumei()
+            # case "101":
+            #     print("slash command 101: send_sagakusyoumei")
+            #     print("run_task__send_sagakusyoumei")
+            #     return runtask_send_sagakusyoumei()
 
             case "102":
                 print("slash command 102: generate_quotes")
