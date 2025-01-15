@@ -21,12 +21,8 @@ services:
       RQ_REDIS_URL: redis://redis
     command: rq worker
     volumes:
-      - type: volume
-        source: exportdir
-        target: /app/exportdir
-      - type: volume
-        source: synology_drive_point
-        target: /app/m_synology_drive_point
+      - ./exportdir:/app/exportdir
+      - ./synology_drive_point:/app/m_synology_drive_point
     working_dir: /app
   app:
     # macOS用
@@ -45,26 +41,9 @@ services:
       RQ_REDIS_URL: redis://redis
       SESSION_REDIS_URL: redis://redis/10
     volumes:
-      - type: volume
-        source: exportdir
-        target: /app/exportdir
-      - type: volume
-        source: synology_drive_point
-        target: /app/m_synology_drive_point
+      - ./exportdir:/app/exportdir
+      - ./synology_drive_point:/app/m_synology_drive_point
     ports:
       - "18081:18081"
       - "8080:8080"
     
-volumes:
-  exportdir:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=192.168.35.18,rw
-      device: ":/volume1/msm-gas-prepare-dktest/"
-  synology_drive_point:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=192.168.35.18,rw
-      device: ":/volume1/sny-workdir/作業用共有フォルダ/"
