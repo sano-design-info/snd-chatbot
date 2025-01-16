@@ -9,6 +9,7 @@ services:
   worker:
     # macOS用
     platform: linux/amd64
+    container_name: snd-chatbot-worker
     # appと同じイメージを使う
     build:
       context: .
