@@ -5,7 +5,7 @@ from pprint import pprint
 from dataclasses import dataclass
 
 import redis
-from flask import Flask, render_template, request
+from flask import Flask, request
 from flask import json as f_json
 from rq import Queue
 
@@ -429,7 +429,19 @@ def response_generator(event):
 def home_get():
     """Respond to GET requests to this endpoint."""
 
-    return render_template("home.html")
+    return """
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Hello!</title>
+      </head>
+
+      <body>
+        <h1>Hello!</h1>
+        <div>There is no content here.</div>
+      </body>
+    </html>
+    """
 
 
 @app.route("/", methods=["POST"])
