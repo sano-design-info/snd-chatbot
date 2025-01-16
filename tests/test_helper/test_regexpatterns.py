@@ -1,6 +1,6 @@
 import pytest
 
-from helper.regexpatterns import *
+from helper.regexpatterns import MSM_ANKEN_NUMBER, INVOICE_DURARION, RANGE_ADDR_PATTERN
 
 
 @pytest.mark.parametrize(
