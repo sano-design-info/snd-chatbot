@@ -12,6 +12,8 @@ SCHEDULE_SPREADSHEET_TABLE_RANGE = "[シート名]![範囲]"
 TORIHIKISAKI_NAME = ""
 
 [google]
+# メールアドレス
+GMAIL_USER_ID = "me"
 # 2025-01-16 認証情報のパスはenv側へ移動しました
 # スペース名を記載します。スペースの設定から確認できます。
 CHAT_SPACENAME = "spaces/[space name]"
