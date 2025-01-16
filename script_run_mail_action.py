@@ -58,7 +58,8 @@ def main() -> None:
 
     # その他質問を確認
     ask_generate_projectfile = questionary.confirm(
-        "プロジェクトファイルを生成しますか？(修正案件の場合は作成しないこと 例: MA-0000-1)", True
+        "プロジェクトファイルを生成しますか？(修正案件の場合は作成しないこと 例: MA-0000-1)",
+        True,
     ).ask()
 
     if not ask_generate_projectfile:
@@ -66,12 +67,15 @@ def main() -> None:
         exit()
 
     ask_add_schedule_and_generate_estimate_calcsheet = questionary.confirm(
-        "スケジュール表追加と見積計算表の作成を行いますか？（プロジェクトファイル再作成時はFalseで）", True
+        "スケジュール表追加と見積計算表の作成を行いますか？（プロジェクトファイル再作成時はFalseで）",
+        True,
     ).ask()
 
     # スキップする場合、↑の質問がFalseになる場合
     ask_add_schedule_nextmonth = (
-        questionary.confirm("スケジュール表追加時に入金日を予定月の来月にしますか？", False)
+        questionary.confirm(
+            "スケジュール表追加時に入金日を予定月の来月にしますか？", False
+        )
         .skip_if(
             ask_add_schedule_and_generate_estimate_calcsheet is False, default=False
         )
@@ -104,7 +108,7 @@ def main() -> None:
             break
         time.sleep(1)
 
-    print(main_job.result)
+    # print(main_job.result)
 
     print("[End Process...]")
     exit()

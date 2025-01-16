@@ -65,7 +65,9 @@ def main(dry_run):
         print("操作をキャンセルしました。終了します。")
         sys.exit(0)
 
-    task_data = {"task_data": {"selected_estimate_calcsheets": selected_estimate_calcsheets}}
+    task_data = {
+        "task_data": {"selected_estimate_calcsheets": selected_estimate_calcsheets}
+    }
 
     main_task = generate_quotes.MainTask()
     main_job = queue.enqueue(main_task.execute_task, task_data)
@@ -76,7 +78,7 @@ def main(dry_run):
             break
         time.sleep(1)
 
-    print(main_job.result)
+    # print(main_job.result)
 
 
 if __name__ == "__main__":
