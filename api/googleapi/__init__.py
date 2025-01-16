@@ -1,14 +1,15 @@
 import base64
 import io
 import mimetypes
+import os
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Mapping
 
 import requests
 from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
@@ -19,17 +20,15 @@ from helper import EXPORTDIR_PATH, load_config
 from itemparser import ExpandedMessageItem
 
 config = load_config.CONFIG
-# TODO:2023-10-10 認証情報のパスはenv側へ移動させるから、os.environ.getで取得するように
-# その時の期待する値はパスとしてみること。余計なパスを追加しない
-cred_filepath = config.get("google").get("CRED_FILEPATH")
+
+cred_json = Path(os.environ.get("GOOGLE_CRED_FILEPATH"))  # oAuthの認証情報
+chat_sa_cred_json = Path(
+    os.environ.get("GOOGLE_CHAT_SA_CRED_FILEPATH")
+)  # Chat APIの認証情報
 
 # generate Path
 EXPORTDIR_PATH.mkdir(parents=True, exist_ok=True)
 token_save_path = EXPORTDIR_PATH / "google_api_access_token.json"
-cred_json = EXPORTDIR_PATH / cred_filepath
-
-# Chat APIの認証情報
-CHAT_SA_CRED_FILEPATH = Path(config.get("google").get("CHAT_SA_CRED_FILEPATH"))
 
 API_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -81,12 +80,11 @@ def get_cledential_by_serviceaccount(scopes: list[str]) -> Credentials:
     return:
         認証情報
     """
-
-    if not CHAT_SA_CRED_FILEPATH.exists():
+    if not chat_sa_cred_json.exists():
         raise FileNotFoundError("サービスアカウントの鍵ファイルがありません。")
 
     return service_account.Credentials.from_service_account_file(
-        CHAT_SA_CRED_FILEPATH, scopes=scopes
+        chat_sa_cred_json, scopes=scopes
     )
 
 
@@ -425,7 +423,7 @@ def append_draft_in_thread(
             .execute()
         )
 
-        print(f'Saved draft: Draft Id: {draft["id"]}')
+        print(f"Saved draft: Draft Id: {draft['id']}")
 
     except HttpError as error:
         print(f"An error occurred: {error}")
@@ -474,7 +472,7 @@ def append_draft(
             )
             .execute()
         )
-        print(f'Saved draft: Draft Id: {draft["id"]}')
+        print(f"Saved draft: Draft Id: {draft['id']}")
 
     except HttpError as error:
         print(f"An error occurred: {error}")

@@ -12,9 +12,7 @@ SCHEDULE_SPREADSHEET_TABLE_RANGE = "[シート名]![範囲]"
 TORIHIKISAKI_NAME = ""
 
 [google]
-GMAIL_USER_ID = "me"
-CRED_FILEPATH = "json path"
-CHAT_SA_CRED_FILEPATH = "json path"
+# 2025-01-16 認証情報のパスはenv側へ移動しました
 # スペース名を記載します。スペースの設定から確認できます。
 CHAT_SPACENAME = "spaces/[space name]"
 
