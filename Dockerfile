@@ -26,4 +26,4 @@ WORKDIR /app
 COPY . /app
 
 # 環境用意あとは、起動しっぱなし。execで入れるようにする
-RUN echo "running! msm-gas-prepare"
+RUN echo "running! snd-chatbot"
