@@ -1,8 +1,7 @@
 import json
 import logging
 import os
-from pprint import pprint
-from dataclasses import dataclass
+# from dataclasses import dataclass
 
 import redis
 from flask import Flask, request
@@ -31,6 +30,16 @@ bot_header = chatcard.bot_header
 # アクションレスポンスの定義
 # https://developers.google.com/hangouts/chat/reference/message-formats/cards#action_response
 ACTION_RESPONSE_OK_JSON = chat.card.genactionresponse_dialog()
+
+
+# チャットボットの応答メッセージを出す。受け取ったメッセージを受け取ったとして、そのメッセージを返す
+def botstatus_response_message(message: str):
+    response_message_str = (
+        f"チャットボット稼働中です。\n受け取ったメッセージ: {message}"
+    )
+    return chat.card.create_card_text(
+        "response_message", bot_header, response_message_str
+    )
 
 
 # TODO:2023-10-19 cardIdとinvokedFunctionの名前についてメモを残す。
@@ -246,7 +255,6 @@ def response_generator(event):
     # debug
     print(f"type:{event['type']}")
     print(f"common: {event_common}")
-    # pprint(f"dialog_event_type: {dedialog_event_type}")
     print(f"slachCommand: {slash_command}")
     print(f"invoked_function:{invoked_function}")
 
@@ -391,6 +399,7 @@ def response_generator(event):
         command_id = slash_command.get("commandId", 0)
         # TODO:2023-10-10 スラッシュコマンドでそれぞれの機能を呼び出すカードを出す機能も実装する
         match command_id:
+            # TODO: 2025-01-16 この計算機能はbotstatus_response_messageが動いたら消す
             case "1":
                 print("slash command 1: run_calc")
                 # セッション初期化
@@ -407,22 +416,24 @@ def response_generator(event):
             case "104":
                 print("slash command 104: run_mail_action")
                 return run_preparetask_run_mail_action()
+            case "999":
+                print("slash command 999: botstatus_response_message")
+                return botstatus_response_message(event["message"]["text"])
 
     # 3. チャットボットのオンボーディング処理
-    # 4. 通常のメッセージに対してのレスポンス
-    # Case 1: The app was added to a room
+    # Case 1: ルーム追加
     if event_type == "ADDED_TO_SPACE" and event["space"]["type"] == "ROOM":
         text = f"「{event['space']['displayName']}」に追加してくれてありがとう！"
-
-    # Case 2: The app was added to a DM
+    # Case 2: DMに追加されたとき
     elif event_type == "ADDED_TO_SPACE" and event["space"]["type"] == "DM":
         text = f"DMに追加してくれてありがとう、{event['user']['displayName']}!"
 
+    # 4. 通常のメッセージに対してのレスポンス
     elif event_type == "MESSAGE":
         text = f'メッセージ: "{event["message"]["text"]}"'
 
     result = chat.card.create_card_text("other_event", bot_header, text)
-    # pprint(result)
+
     return result
 
 
