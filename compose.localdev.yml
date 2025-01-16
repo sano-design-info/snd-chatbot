@@ -9,6 +9,7 @@ services:
   worker:
     # macOS用
     platform: linux/amd64
+    container_name: snd-chatbot-worker
     # appと同じイメージを使う
     build:
       context: .
@@ -24,7 +25,7 @@ services:
   app:
     # macOS用
     platform: linux/amd64
-    container_name: msm-gas-prepare
+    container_name: snd-chatbot
     build:
       context: .
       dockerfile: Dockerfile

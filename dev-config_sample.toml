@@ -7,29 +7,17 @@ SCHEDULE_SPREADSHEET_ID = "[シートID]"
 # スケジュール表の範囲先
 SCHEDULE_SPREADSHEET_TABLE_RANGE = "[シート名]![範囲]"
 
-# [generate_quotes, get_billingで利用]
+# [generate_quotes, generate_invoiceで利用]
 # 見積書、請求書へ記載する会社名
 TORIHIKISAKI_NAME = ""
 
 [google]
+# メールアドレス
 GMAIL_USER_ID = "me"
-CRED_FILEPATH = "json path"
-CHAT_SA_CRED_FILEPATH = "json path"
+# 2025-01-16 認証情報のパスはenv側へ移動しました
 # スペース名を記載します。スペースの設定から確認できます。
 CHAT_SPACENAME = "spaces/[space name]"
 
-# 2024-02-01 このセクションは今後利用しないので、除去予定。
-[mfci]
-# 取引先IDの取得方法: 取引先一覧 -> そのIDではなく、そのID -> 取引先取得 -> relationships>departments>data>id が取引先ID
-# 法人側乗り換えで登録した取引先ID
-TORIHIKISAKI_ID = ""
-
-# 認証情報 法人側 v3
-MFCLOUD_CLIENT_ID = ""
-MFCLOUD_CLIENT_SECRET = ""
-
-# APIで一度に取得するデータ件数
-QUOTE_PER_PAGE = 100
 
 [run_mail_action]
 # ボイラープレート向け
@@ -79,7 +67,7 @@ mail_template_body = """
 ここに署名が入ります
 """
 
-[get_billing]
+[generate_invoice]
 # 請求書生成:
 # 請求書のファイル一覧を記録するGoogleスプレッドシートのID
 # https://docs.google.com/spreadsheets/d/[シートID]
@@ -104,26 +92,3 @@ mail_template_body = """
 
 ここに署名が入ります
 """
-
-[send_sagakusyoumei]
-MSM_PROSUGATE_ID = ""
-MSM_PROSUGATE_PASS = ""
-
-# https://docs.google.com/spreadsheets/d/[シートID]
-TEMPLATE_SHEET_ID = "[シートID]"
-
-MAIL_TO = ""
-MAIL_CC = ""
-MAIL_TEMPLATE_TITLE = "test 売掛金勘定差額明細書（請求書）送付について"
-MAIL_TEMPLATE_BODY = """
-
-{{billing_year}}年{{billing_month}}月の売掛金勘定差額明細書のメールテスト用です
-
----
-
-ここに署名が入ります
-"""
-
-[other]
-# スケジュール表更新用に収集するデータのフォルダ
-# HAKIAN_PROJECT_DIRPATH = "Z:/00_取引先一覧/80ミスミ「ガススプリング配管図」/1 配管図/2022/"

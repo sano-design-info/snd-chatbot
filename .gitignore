@@ -157,14 +157,11 @@ exam
 export_files
 .DS_Store
 quote/
-billing/
+invoice/
 debug.log
 *config.toml
 google_client_secret.json
-mfcloud_access_token.json
 google_api_access_token.json
-chat_sa_client_secret.json
-synology_drive_point
 cell_mapping_*.json
 synology_drive_point/*
 google_chat_sa.json

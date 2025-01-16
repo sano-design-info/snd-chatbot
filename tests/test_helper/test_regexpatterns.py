@@ -1,6 +1,6 @@
 import pytest
 
-from helper.regexpatterns import *
+from helper.regexpatterns import MSM_ANKEN_NUMBER, INVOICE_DURARION, RANGE_ADDR_PATTERN
 
 
 @pytest.mark.parametrize(
@@ -32,12 +32,12 @@ def test_group_msm_anken_number(targetstr, expected):
     assert MSM_ANKEN_NUMBER.match(targetstr).groups() == expected
 
 
-# get_billingのテスト
-def test_match_billing_durarion():
-    assert BILLING_DURARION.match("納期 1/2") is not None
-    assert BILLING_DURARION.match("納期 10/22") is not None
+# generate_invoiceのテスト
+def test_match_invoice_durarion():
+    assert INVOICE_DURARION.match("納期 1/2") is not None
+    assert INVOICE_DURARION.match("納期 10/22") is not None
     # グループ名
-    assert BILLING_DURARION.match("納期 1/2").group("durarion") == "1/2"
+    assert INVOICE_DURARION.match("納期 1/2").group("durarion") == "1/2"
 
 
 # itemparserのテスト

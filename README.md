@@ -30,7 +30,7 @@ compose.ymlにあるvolumeの意味は次の通り。
 
 ## チャットボットの各種機能
 
-TODO: 2025-01-15  各種機能の意味を乗せる。 run_mail_action, generaete_quote, get_billing
+TODO: 2025-01-15  各種機能の意味を乗せる。 run_mail_action, generaete_quote, generate_invoice
 ### run mail action/メールから各種ファイルとスプレッドシート登録スクリプト
 
 やってくれること

@@ -1,0 +1,167 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "https://www.w3.org/TR/html4/strict.dtd">
+<html lang="ja">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style type="text/css" nonce="EmX4BfKne4_wAFPlSj0R6A">
+      body,
+      td,
+      div,
+      p,
+      a,
+      input {
+        font-family: arial, sans-serif;
+      }
+    </style>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <link
+      rel="shortcut icon"
+      href="https://www.google.com/a/cpanel/sano-design.info/images/favicon.ico"
+      type="image/x-icon"
+    />
+    <title>{{ message_title }}</title>
+    <style type="text/css" nonce="EmX4BfKne4_wAFPlSj0R6A">
+      body,
+      td {
+        font-size: 13px;
+      }
+      a:link,
+      a:active {
+        color: #1155cc;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      a:visited {
+        color: #6611cc;
+      }
+      img {
+        border: 0px;
+      }
+      pre {
+        white-space: pre;
+        white-space: -moz-pre-wrap;
+        white-space: -o-pre-wrap;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-width: 800px;
+        overflow: auto;
+      }
+      .logo {
+        left: -7px;
+        position: relative;
+      }
+    </style>
+    <body>
+      <div class="bodycontainer">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr height="14px">
+            <td width="143">
+              <img
+                src="https://ci6.googleusercontent.com/proxy/WQ_JO_iFWK3AKuIPeHz_fnMMOaGLG0HAsCJWOkWiRo9Oa_NHUeQYCdmJEfw8llIVJ8fMP1mriJ81iPzrebHtesFsF7VIDS0QKCFmqu_RMT_-ow=s0-d-e1-ft"
+                width="143"
+                height="59"
+                alt="株式会社佐野設計事務所 メール"
+                class="logo"
+              />
+            </td>
+            <td align="right">
+              <font size="-1" color="#777"
+                ><b>hiroshi sano &lt;hiroshi.sano@sano-design.info&gt;</b></font
+              >
+            </td>
+          </tr>
+        </table>
+        <hr />
+        <div class="maincontent">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td>
+                <font size="+1"
+                  ><b>{{ message_title }}</b></font
+                ><br />
+                <!-- <font size="-1" color="#777">1 件のメッセージ</font> -->
+              </td>
+            </tr>
+          </table>
+          <hr />
+
+          <!-- ここはスレッド単位でループになる。スレッドは一つと仮定しているから、ここはループせずに単独でよし -->
+
+          <table
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            class="message"
+          >
+            <tr>
+              <td>
+                <!-- from -->
+                <font size="-1">{{ message_from_address }}</font>
+              </td>
+              <td align="right">
+                <font size="-1">{{
+                  message_datetime.strftime('%Y年%m月%d日 %H:%M')
+                }}</font>
+                <tr>
+                  <!-- to TODO:2022-12-07  ここは今は固定で良し。そのうちにメールjsonから取り出すこと -->
+                  <td colspan="2" style="padding-bottom: 4px">
+                    <font size="-1" class="recipient">
+                      <div>
+                        To: "hiroshi.sano" &lt;hiroshi.sano@sano-design.info&gt;
+                      </div>
+                      {%if message_cc_address %}
+                      <div>Cc: {{ message_cc_address }}</div>
+                      {% endif %}
+                    </font>
+                    <tr>
+                      <td colspan="2">
+                        <table
+                          width="100%"
+                          cellpadding="12"
+                          cellspacing="0"
+                          border="0"
+                        >
+                          <tr>
+                            <td>
+                              <div style="overflow: hidden">
+                                <font size="-1">
+                                  <div
+                                    lang="JA"
+                                    link="#0563C1"
+                                    vlink="#954F72"
+                                    style="word-wrap: break-word"
+                                  >
+                                    <!-- メッセージ本体 -->
+                                    <div>
+                                      {{ export_html }}
+                                    </div>
+                                  </div>
+                                </font>
+                              </div>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </td>
+                </tr>
+              </td>
+            </tr>
+          </table>
+          <hr />
+        </div>
+      </div>
+      <!-- <script type="text/javascript" nonce="XZxtr_Xa4iZhNuxyc-rHXQ">
+        // <![CDATA[
+        document.body.onload = function () {
+          document.body.offsetHeight
+          window.print()
+        }
+        // ]]>
+      </script> -->
+    </body>
+  </head>
+</html>
