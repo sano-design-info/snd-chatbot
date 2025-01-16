@@ -228,7 +228,7 @@ def generate_invoice_list_excel(
     }
 
     wb = openpyxl.load_workbook(
-        str((ROOTDIR / "itemparser/billing_list_template.xlsx"))
+        str((ROOTDIR / "templates/billing_list_template.xlsx"))
     )
     ws = wb.active
 
