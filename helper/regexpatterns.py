@@ -18,8 +18,8 @@ MSM_ANKEN_NUMBER = re.compile(
     r"(?P<basepartnumber>MA-(?P<onlynumber>\d{4}))-?((UPPER|LOWER)?-?(RH|LH)?-?(\d{1})?)?"
 )
 
-# get_billingのパターン
-BILLING_DURARION = re.compile(r"納期\s*(?P<durarion>\d{1,2}/\d{1,2})")
+# generate_invoiceのパターン
+INVOICE_DURARION = re.compile(r"納期\s*(?P<durarion>\d{1,2}/\d{1,2})")
 
 # itemparserのパターン
 

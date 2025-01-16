@@ -14,8 +14,8 @@ import chat.session
 from helper import chatcard, convert_dataclass_to_jsonhash_str
 from task import (
     bot_calc_add,
+    generate_invoice,
     generate_quotes,
-    get_billing,
     run_mail_action,
 )
 
@@ -80,35 +80,37 @@ def run_task_generate_quotes(session_data: dict) -> dict:
     return ACTION_RESPONSE_OK_JSON
 
 
-# [get_billing]: 設定カード→内容確認→メインタスク実行
-def run_preparetask_get_billing() -> dict:
+# [generate_invoice]: 設定カード→内容確認→メインタスク実行
+def run_preparetask_generate_invoice() -> dict:
     # prepareタスク実行後に設定カードを開く
-    prepare_task = get_billing.PrepareTask()
+    prepare_task = generate_invoice.PrepareTask()
     job = queue.enqueue(prepare_task.execute_task_by_chat)
 
     print(f"job.id:{job.id}")
     return ACTION_RESPONSE_OK_JSON
 
 
-def confirm_get_billing(session_data: dict) -> dict:
+def confirm_generate_invoice(session_data: dict) -> dict:
     # 請求書の計算を行う: セッションデータにはjson文字列が入っているので、dataclassへ変換する
     ask_choiced_quote_list = [
-        convert_dataclass_to_jsonhash_str(choiced_quote_jsonstr, get_billing.QuoteData)
+        convert_dataclass_to_jsonhash_str(
+            choiced_quote_jsonstr, generate_invoice.QuoteData
+        )
         for choiced_quote_jsonstr in session_data.get("choiced_quote_list")
     ]
 
     # 見積書の情報を元に、金額の合計を出す
-    billing_data = get_billing.generate_invoice_data(ask_choiced_quote_list)
+    invoice_data = generate_invoice.generate_invoice_data(ask_choiced_quote_list)
 
     # ここで請求書情報を出して、こちらの検証と正しいか確認
     calc_result = f"""
     [請求情報]
     件数: {len(ask_choiced_quote_list)}
-    合計金額:{billing_data.price}
+    合計金額:{invoice_data.price}
     """
 
     cardbody = chat.card.create_card(
-        "confirm__get_billing",
+        "confirm__generate_invoice",
         header=bot_header,
         widgets=[
             chat.card.genwidget_textparagraph(
@@ -117,7 +119,7 @@ def confirm_get_billing(session_data: dict) -> dict:
             chat.card.genwidget_textparagraph(calc_result),
             chat.card.genwidget_buttonlist(
                 [
-                    chat.card.gencomponent_button("実行", "run_task__get_billing"),
+                    chat.card.gencomponent_button("実行", "run_task__generate_invoice"),
                     chat.card.gencomponent_button("キャンセル", "cancell_task"),
                 ]
             ),
@@ -127,20 +129,20 @@ def confirm_get_billing(session_data: dict) -> dict:
     return cardbody
 
 
-def runtask_get_billing(session_data: dict) -> dict:
+def runtask_generate_invoice(session_data: dict) -> dict:
     # メインタスク向けに、セッションデータを整形する
     task_data = {
         "task_data": {
             # ask_dataの中身はjson文字列のリストなので、dataclassに変換する
             "choiced_quote_list": [
                 convert_dataclass_to_jsonhash_str(
-                    choiced_quote_jsonstr, get_billing.QuoteData
+                    choiced_quote_jsonstr, generate_invoice.QuoteData
                 )
                 for choiced_quote_jsonstr in session_data.get("choiced_quote_list")
             ]
         }
     }
-    script_task = get_billing.MainTask()
+    script_task = generate_invoice.MainTask()
     job = queue.enqueue(script_task.execute_task_by_chat, args=(task_data,))
 
     print(f"job.id:{job.id}")
@@ -273,9 +275,9 @@ def response_generator(event):
                 # タスクを実行する-> アクションレスポンスを返す
                 return run_task_generate_quotes(session_data)
 
-            # get_billing
-            case "confirm__get_billing":
-                print("confirm__get_billing")
+            # generate_invoice
+            case "confirm__generate_invoice":
+                print("confirm__generate_invoice")
 
                 choiced_quote_list = event_forminputs["quoteitems"]["stringInputs"][
                     "value"
@@ -283,25 +285,25 @@ def response_generator(event):
 
                 session_manager.update_session(
                     user_id,
-                    "get_billing",
+                    "generate_invoice",
                     chat.session.TaskState.RUNNING,
                     data={"choiced_quote_list": choiced_quote_list},
                 )
                 # 確認用のカードを表示する
-                return confirm_get_billing(
-                    session_manager.get_session(user_id, "get_billing")["data"]
+                return confirm_generate_invoice(
+                    session_manager.get_session(user_id, "generate_invoice")["data"]
                 )
 
-            case "run_task__get_billing":
-                print("run_task__get_billing")
-                now_session = session_manager.get_session(user_id, "get_billing")
+            case "run_task__generate_invoice":
+                print("run_task__generate_invoice")
+                now_session = session_manager.get_session(user_id, "generate_invoice")
                 session_data = now_session.get("data", "{}")
                 session_manager.update_session(
-                    user_id, "get_billing", chat.session.TaskState.COMPLETED
+                    user_id, "generate_invoice", chat.session.TaskState.COMPLETED
                 )
 
                 # タスクを実行する-> アクションレスポンスを返す
-                return runtask_get_billing(session_data)
+                return runtask_generate_invoice(session_data)
 
             # run_mail_action
             case "run_task__run_mail_action":
@@ -400,8 +402,8 @@ def response_generator(event):
                 print("slash command 102: generate_quotes")
                 return run_preparetask_generate_quotes()
             case "103":
-                print("slash command 103: get_billing")
-                return run_preparetask_get_billing()
+                print("slash command 103: generate_invoice")
+                return run_preparetask_generate_invoice()
             case "104":
                 print("slash command 104: run_mail_action")
                 return run_preparetask_run_mail_action()
@@ -410,7 +412,7 @@ def response_generator(event):
     # 4. 通常のメッセージに対してのレスポンス
     # Case 1: The app was added to a room
     if event_type == "ADDED_TO_SPACE" and event["space"]["type"] == "ROOM":
-        text = f'「{event["space"]["displayName"]}」に追加してくれてありがとう！'
+        text = f"「{event['space']['displayName']}」に追加してくれてありがとう！"
 
     # Case 2: The app was added to a DM
     elif event_type == "ADDED_TO_SPACE" and event["space"]["type"] == "DM":

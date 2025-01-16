@@ -7,7 +7,7 @@ SCHEDULE_SPREADSHEET_ID = "[シートID]"
 # スケジュール表の範囲先
 SCHEDULE_SPREADSHEET_TABLE_RANGE = "[シート名]![範囲]"
 
-# [generate_quotes, get_billingで利用]
+# [generate_quotes, generate_invoiceで利用]
 # 見積書、請求書へ記載する会社名
 TORIHIKISAKI_NAME = ""
 
@@ -65,7 +65,7 @@ mail_template_body = """
 ここに署名が入ります
 """
 
-[get_billing]
+[generate_invoice]
 # 請求書生成:
 # 請求書のファイル一覧を記録するGoogleスプレッドシートのID
 # https://docs.google.com/spreadsheets/d/[シートID]

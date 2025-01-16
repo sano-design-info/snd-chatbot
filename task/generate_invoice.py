@@ -15,7 +15,7 @@ import chat.card
 from api import googleapi
 
 from helper import EXPORTDIR_PATH, ROOTDIR, chatcard, load_config
-from helper.regexpatterns import BILLING_DURARION, MSM_ANKEN_NUMBER
+from helper.regexpatterns import INVOICE_DURARION, MSM_ANKEN_NUMBER
 from task import BaseTask, ProcessData
 
 # `2020-01-01` のフォーマットのみ受け付ける
@@ -26,7 +26,7 @@ config = load_config.CONFIG
 # MISUMI_TORIHIKISAKI_ID = config.get("mfci").get("TORIHIKISAKI_ID")
 # QUOTE_PER_PAGE = config.get("mfci").get("QUOTE_PER_PAGE")
 
-SCRIPT_CONFIG = config.get("get_billing")
+SCRIPT_CONFIG = config.get("generate_invoice")
 GENERATE_QUOTES_CONFIG = config.get("generate_quotes")
 TORIHIKISAKI_NAME = config.get("general").get("TORIHIKISAKI_NAME")
 
@@ -60,19 +60,19 @@ INVOICE_GSHEET_SAVE_DIR_IDS = SCRIPT_CONFIG.get("INVOICE_GSHEET_SAVE_DIR_IDS")
 INVOICE_DOC_SAVE_DIR_IDS = SCRIPT_CONFIG.get("INVOICE_DOC_SAVE_DIR_IDS")
 
 # 各定数から全体で使う変数を作成
-export_billing_dirpath = EXPORTDIR_PATH / "billing"
-export_billing_dirpath.mkdir(parents=True, exist_ok=True)
+export_invoice_dirpath = EXPORTDIR_PATH / "invoice"
+export_invoice_dirpath.mkdir(parents=True, exist_ok=True)
 
 with open(INVOICE_TEMPLATE_CELL_MAPPING_JSON_PATH, "r", encoding="utf-8") as f:
     invoice_template_cell_mapping_dict = json.load(f)
 
 # 本日の日付を全体で使うためにここで宣言
 today_datetime = datetime.now(ZoneInfo("Asia/Tokyo"))
-BILLING_PDFFILEPATH = (
-    export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
+INVOICE_PDFFILEPATH = (
+    export_invoice_dirpath / f"{today_datetime:%Y%m}_ミスミ配管請求書.pdf"
 )
-BILLING_LIST_EXCELPATH = (
-    export_billing_dirpath / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
+INVOICE_LIST_EXCELPATH = (
+    export_invoice_dirpath / f"{today_datetime:%Y%m}_ミスミ配管納品一覧.xlsx"
 )
 
 # API Session
@@ -139,15 +139,15 @@ class QuoteData:
 
     def __post_init__(self):
         self.only_katasiki = MSM_ANKEN_NUMBER.match(self.hinmoku_title).group(0)
-        self.durarion = BILLING_DURARION.match(self.durarion_src).group("durarion")
+        self.durarion = INVOICE_DURARION.match(self.durarion_src).group("durarion")
 
 
 @dataclass
-class BillingInfo:
+class InvoiceInfo:
     """作成する請求書情報のデータ構造"""
 
     price: float
-    billing_title: str
+    title: str
     hinmoku_title: str
 
 
@@ -213,23 +213,21 @@ def set_border_style(
 
 # TODO:2024-02-12 ここはgoogleスプレッドシートに保存して、excelのファイルとしてダウンロードさせる
 def generate_invoice_list_excel(
-    billing_target_quotes: list[QuoteData],
+    invoice_target_quotes: list[QuoteData],
 ) -> Path:
     """
     請求対象一覧をxlsxファイルに出力する
     """
     # テンプレートの形式に沿った数字の設定
     row_start = 6
-    # BillingTargetQuoteの構造に従ったマップ
+    # InvoiceTargetQuoteの構造に従ったマップ
     column_fieldmap = {
         "only_katasiki": 2,
         "durarion": 3,
         "price": 4,
     }
 
-    wb = openpyxl.load_workbook(
-        str((ROOTDIR / "templates/billing_list_template.xlsx"))
-    )
+    wb = openpyxl.load_workbook(str((ROOTDIR / "templates/invoice_list_template.xlsx")))
     ws = wb.active
 
     # A1セルに"2023年**月請求一覧"と入れる。**は今月の月
@@ -238,19 +236,19 @@ def generate_invoice_list_excel(
     ws["D1"] = f"{today_datetime:%Y年%m月%d日}"
 
     # 6行目からデータを入れる。
-    for row, quote in enumerate(billing_target_quotes, start=row_start):
+    for row, quote in enumerate(invoice_target_quotes, start=row_start):
         for key, col in column_fieldmap.items():
             ws.cell(row=row, column=col).value = getattr(quote, key)
 
     # 罫線を入れる。set_border_styleを使う
     set_border_style(
-        ws, len(billing_target_quotes), column_fieldmap.values(), row_start
+        ws, len(invoice_target_quotes), column_fieldmap.values(), row_start
     )
 
     # ファイルを保存する
     # TODO:2023-08-29 ここのファイル名の戻り値って意味ある？
-    wb.save(BILLING_LIST_EXCELPATH)
-    return BILLING_LIST_EXCELPATH
+    wb.save(INVOICE_LIST_EXCELPATH)
+    return INVOICE_LIST_EXCELPATH
 
 
 def str_to_datetime_with_dateutil(date_str):
@@ -284,7 +282,7 @@ def str_to_datetime_with_dateutil(date_str):
     return date
 
 
-# TODO:2024-02-12 test_get_billingでテストを書くこと
+# TODO:2024-02-12 test_generate_invoiceでテストを書くこと
 def is_range_date(
     target_date: datetime, start_date: datetime, end_date: datetime | None = None
 ) -> bool:
@@ -315,18 +313,18 @@ def is_range_date(
 # 請求書の金額合計のデータを生成する
 def generate_invoice_data(
     quote_checked_list: list[QuoteData],
-) -> BillingInfo:
+) -> InvoiceInfo:
     """
     請求書にする見積書の金額を合計する。
-    表示用に件数とBillingInfoのタプルを返す
+    表示用に件数とInvoiceInfoのタプルを返す
 
     args:
         quote_checked_list: 請求書にする見積書のリスト
     return:
-        件数とBillingInfoのタプル
+        件数とInvoiceInfoのタプル
 
     """
-    return BillingInfo(
+    return InvoiceInfo(
         sum((i.price for i in quote_checked_list)),
         "ガススプリング配管図作製費",
         f"{today_datetime:%Y年%m月}請求分",
@@ -397,7 +395,7 @@ def get_values_by_range(
     )
     # 取得した値を辞書にして返す
     return {
-        key: value.get("values",[[""]])[0][0]
+        key: value.get("values", [[""]])[0][0]
         for key, value in zip(name_and_range_dict, result.get("valueRanges"))
     }
 
@@ -464,13 +462,14 @@ class PrepareTask(BaseTask):
                     tzinfo=ZoneInfo("Asia/Tokyo")
                 ),
                 from_date,
-            ) and MSM_ANKEN_NUMBER.match(quote_values["hinmoku_name"])
+            )
+            and MSM_ANKEN_NUMBER.match(quote_values["hinmoku_name"])
         ]
 
         # デフォルト表示の選択マーク用のリストを作成
         # 納期（duration）を使って複数選択のデフォルト選択をマーク
         # 期限設定: 実行日（今日）から1か月前の日付をマーク。実行日は月末想定なので、今月末を計算する
-        
+
         # 見積書の一覧を表示して、選択させる
         return [
             (
@@ -478,12 +477,13 @@ class PrepareTask(BaseTask):
                 is_range_date(
                     str_to_datetime_with_dateutil(quote_data.durarion).replace(
                         tzinfo=ZoneInfo("Asia/Tokyo")
-                    ), 
+                    ),
                     # 実行日の月初め
                     today_datetime.replace(day=1),
                     # ここは今月末を取得する処理に変更する
-                    today_datetime.replace(day=1) + relativedelta(months=1) - timedelta(days=1)
-
+                    today_datetime.replace(day=1)
+                    + relativedelta(months=1)
+                    - timedelta(days=1),
                 ),
             )
             for quote_data in quote_data_list
@@ -506,7 +506,7 @@ class PrepareTask(BaseTask):
         )
         # 設定カードを生成
         config_body = chat.card.create_card(
-            "config_card__get_billing",
+            "config_card__generate_invoice",
             header=bot_header,
             widgets=[
                 quotelist_checkbox,
@@ -514,7 +514,7 @@ class PrepareTask(BaseTask):
                 chat.card.genwidget_buttonlist(
                     [
                         chat.card.gencomponent_button(
-                            "タスク実行確認", "confirm__get_billing"
+                            "タスク実行確認", "confirm__generate_invoice"
                         ),
                         chat.card.gencomponent_button("キャンセル", "cancel_task"),
                     ]
@@ -536,7 +536,7 @@ class MainTask(BaseTask):
         # excelファイルをGoogleドライブへ保存
         upload_xlsx_result = googleapi.upload_file(
             gdrive_service,
-            BILLING_LIST_EXCELPATH,
+            INVOICE_LIST_EXCELPATH,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             INVOICE_DOC_SAVE_DIR_IDS,
@@ -566,7 +566,7 @@ class MainTask(BaseTask):
         # * 請求書の作成
         converted_invoice_dict = convert_dict_to_gsheet_tamplate(
             invoice_number,
-            invoice_data.billing_title,
+            invoice_data.title,
             invoice_data.hinmoku_title,
             invoice_data.price,
         )
@@ -575,7 +575,7 @@ class MainTask(BaseTask):
         invoice_file_id = googleapi.dupulicate_file(
             gdrive_service,
             INVOICE_TEMPLATE_GSHEET_ID,
-            BILLING_PDFFILEPATH.stem,
+            INVOICE_PDFFILEPATH.stem,
         )
 
         # 請求書スプレッドシートのファイル名と保存先を設定
@@ -599,7 +599,7 @@ class MainTask(BaseTask):
         googleapi.export_pdf_by_driveexporturl(
             google_cred.token,
             invoice_file_id,
-            BILLING_PDFFILEPATH,
+            INVOICE_PDFFILEPATH,
             {
                 "gid": "0",
                 "size": "7",
@@ -612,7 +612,7 @@ class MainTask(BaseTask):
         # 請求書のPDFをGoogleドライブへ保存
         upload_pdf_result = googleapi.upload_file(
             gdrive_service,
-            BILLING_PDFFILEPATH,
+            INVOICE_PDFFILEPATH,
             "application/pdf",
             "application/pdf",
             INVOICE_DOC_SAVE_DIR_IDS,
@@ -632,7 +632,7 @@ class MainTask(BaseTask):
             .replace("A", "B"),
             [
                 [
-                    BILLING_PDFFILEPATH.stem,
+                    INVOICE_PDFFILEPATH.stem,
                     f"http://docs.google.com/spreadsheets/d/{invoice_file_id}",
                     f"http://drive.google.com/file/d/{upload_pdf_result.get('id')}",
                 ]
@@ -641,10 +641,10 @@ class MainTask(BaseTask):
 
         print("一覧と請求書生成しました")
         print(
-            f"一覧xlsxファイルパス:{BILLING_LIST_EXCELPATH}\n請求書pdf:{BILLING_PDFFILEPATH}"
+            f"一覧xlsxファイルパス:{INVOICE_LIST_EXCELPATH}\n請求書pdf:{INVOICE_PDFFILEPATH}"
         )
 
-        return set_draft_mail([BILLING_LIST_EXCELPATH, BILLING_PDFFILEPATH])
+        return set_draft_mail([INVOICE_LIST_EXCELPATH, INVOICE_PDFFILEPATH])
 
     # チャット用のタスクメソッド
     def execute_task_by_chat(
@@ -653,7 +653,7 @@ class MainTask(BaseTask):
         result = self.execute_task(process_data)
         # チャット用のメッセージを作成する
         send_message_body = chat.card.create_card(
-            "result_card__get_billing",
+            "result_card__generate_invoice",
             header=bot_header,
             widgets=[
                 chat.card.genwidget_textparagraph(

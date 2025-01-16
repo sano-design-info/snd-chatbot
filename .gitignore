@@ -157,7 +157,7 @@ exam
 export_files
 .DS_Store
 quote/
-billing/
+invoice/
 debug.log
 *config.toml
 google_client_secret.json

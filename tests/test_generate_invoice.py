@@ -1,16 +1,16 @@
-# get_billing スクリプトのテスト
+# generate_invoice スクリプトのテスト
 import json
 
 from pathlib import Path
 import pytest
 
-from task.get_billing import (
+from task.generate_invoice import (
     generate_dl_numbers,
     QuoteData,
     generate_billing_info_json,
     today_datetime,
     START_DATE_FORMAT,
-    BillingInfo,
+    InvoiceInfo,
     generate_json_mfci_billing_item,
 )
 
@@ -61,7 +61,7 @@ def test_generate_billing_json_data(testdata: tuple, expected_jsonpath: str):
     # 期待値jsonのbilling_dateを今日の日付に変更する
     excepted_jsondata["billing_date"] = today_datetime.strftime(START_DATE_FORMAT)
     result = generate_billing_info_json(
-        BillingInfo(testdata[0], "ガススプリング配管図作製費", testdata[1])
+        InvoiceInfo(testdata[0], "ガススプリング配管図作製費", testdata[1])
     )
 
     assert result["department_id"] == excepted_jsondata["department_id"]
@@ -69,7 +69,7 @@ def test_generate_billing_json_data(testdata: tuple, expected_jsonpath: str):
     # item側を生成する
 
     item_result = generate_json_mfci_billing_item(
-        BillingInfo(testdata[0], "ガススプリング配管図作製費", testdata[1])
+        InvoiceInfo(testdata[0], "ガススプリング配管図作製費", testdata[1])
     )
 
     # items.name
