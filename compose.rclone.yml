@@ -1,0 +1,92 @@
+services:
+  redis:
+    # macOS用
+    platform: linux/amd64
+    image: redis
+    restart: always
+    ports:
+      - '6379:6379'
+  worker:
+    # macOS用
+    platform: linux/amd64
+    container_name: snd-chatbot-worker
+    # appと同じイメージを使う
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+    restart: always
+    environment:
+      RQ_REDIS_URL: redis://redis
+    command: rq worker
+    volumes:
+      - type: volume
+        source: exportdir
+        target: /app/exportdir
+      - type: volume
+        source: snd-sync-dir
+        target: /app/m_synology_drive_point
+    working_dir: /app
+  app:
+    # macOS用
+    platform: linux/amd64
+    container_name: snd-chatbot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+      - worker
+    restart: always
+    tty: true
+    command: python chatapp.py
+    environment:
+      RQ_REDIS_URL: redis://redis
+      SESSION_REDIS_URL: redis://redis/10
+    volumes:
+      - type: volume
+        source: exportdir
+        target: /app/exportdir
+      - type: volume
+        source: snd-sync-dir
+        target: /app/m_synology_drive_point
+    ports:
+      - "18081:18081"
+      - "8080:8080"
+
+volumes:
+  # rclone command (snd-sync-dir)
+  # rclone mount snd-sync-dir:/ ~/snd-gdrige_sherefolder/snd-sync-dir \
+  #   --vfs-cache-mode writes \
+  #   --buffer-size 128M \
+  #   --drive-chunk-size 256M \
+  #   --transfers 4 \
+  #   --vfs-read-chunk-size 26M \
+  #   --vfs-read-chunk-size-limit off \
+  #   --dir-cache-time 10m \
+  #   --poll-interval 1m \
+  exportdir:
+    driver: rclone
+    driver_opts:
+      remote: "snd-chatbot-exportdir:"
+      vfs_cache_mode: writes
+      # buffer_size : 128M
+      drive_chunk_size: 256M
+      # transfers : 4
+      vfs_read_chunk_size: 26M
+      vfs_read_chunk_size_limit: off
+      dir_cache_time: 10m
+      poll_interval: 1m
+  snd-sync-dir:
+    driver: rclone
+    driver_opts:
+      remote: "snd-sync-dir:"
+      vfs_cache_mode: writes
+      # buffer_size : 128M
+      drive_chunk_size: 256M
+      # transfers : 4
+      vfs_read_chunk_size: 26M
+      vfs_read_chunk_size_limit: off
+      dir_cache_time: 10m
+      poll_interval: 1m
