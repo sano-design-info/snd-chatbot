@@ -27,6 +27,7 @@ chat_sa_cred_json = Path(
 )  # Chat APIの認証情報
 
 # generate Path
+# TODO: 2025-01-16 ここではなく別のディレクトリに保存する。ローカルが本来は良いと思うので、ホームディレクトリかな？
 EXPORTDIR_PATH.mkdir(parents=True, exist_ok=True)
 token_save_path = EXPORTDIR_PATH / "google_api_access_token.json"
 
