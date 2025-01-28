@@ -317,6 +317,7 @@ def response_generator(event):
             case "run_task__run_mail_action":
                 print("run_task__run_mail_action")
 
+                # TODO: 2025-01-28 ここでフォームの選択がされていない場合のエラーを返す
                 session_data = {
                     "selected_message_id": event_forminputs["selected_message_id"][
                         "stringInputs"
